@@ -14,8 +14,15 @@ local mouse = player:GetMouse()
 
 -- Wait for RemoteEvents
 local buildRemotes = ReplicatedStorage:WaitForChild("BuildRemotes")
-local PlaceStructure = buildRemotes:WaitForChild("PlaceStructure")
-local DeleteStructure = buildRemotes:WaitForChild("DeleteStructure")
+local PlaceStructureRemote = buildRemotes:WaitForChild("PlaceStructure")
+local DeleteStructureRemote = buildRemotes:WaitForChild("DeleteStructure")
+
+-- Wait for BuildEvents
+local buildEvents = ReplicatedStorage:WaitForChild("BuildEvents")
+local slotSelected = buildEvents:WaitForChild("SlotSelected")
+local slotDeselected = buildEvents:WaitForChild("SlotDeselected")
+local selectSlotRemote = buildEvents:WaitForChild("SelectSlot")
+local deselectSlotRemote = buildEvents:WaitForChild("DeselectSlot")
 
 -- Build mode state
 local buildMode = {
@@ -140,14 +147,8 @@ local function SelectSlot(slotNumber)
 	buildMode.active = true
 	UpdateGhost()
 	
-	-- Update UI (will be handled by BuildUI)
-	local event = ReplicatedStorage:FindFirstChild("BuildEvents")
-	if event then
-		local slotSelected = event:FindFirstChild("SlotSelected")
-		if slotSelected then
-			slotSelected:Fire(slotNumber)
-		end
-	end
+	-- Update UI
+	slotSelected:Fire(slotNumber)
 end
 
 -- Deselect current slot
@@ -161,13 +162,7 @@ local function DeselectSlot()
 	end
 	
 	-- Update UI
-	local event = ReplicatedStorage:FindFirstChild("BuildEvents")
-	if event then
-		local slotDeselected = event:FindFirstChild("SlotDeselected")
-		if slotDeselected then
-			slotDeselected:Fire()
-		end
-	end
+	slotDeselected:Fire()
 end
 
 -- Rotate ghost
@@ -206,7 +201,7 @@ local function PlaceStructure()
 	local rotation = buildMode.rotation
 	
 	-- Send to server
-	PlaceStructure:FireServer(config.type, position, rotation)
+	PlaceStructureRemote:FireServer(config.type, position, rotation)
 end
 
 -- Delete structure under mouse
@@ -228,7 +223,7 @@ local function DeleteStructureUnderMouse()
 		local part = result.Instance
 		-- Check if it's a structure or trap
 		if part.Parent and (part.Parent.Name == "Structures" or part.Parent.Name == "Traps") then
-			DeleteStructure:FireServer(part)
+			DeleteStructureRemote:FireServer(part)
 		end
 	end
 end
@@ -267,14 +262,8 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- Expose functions for UI
-local BuildClient = {}
-BuildClient.SelectSlot = SelectSlot
-BuildClient.DeselectSlot = DeselectSlot
-BuildClient.RotateGhost = RotateGhost
-BuildClient.DeleteMode = function()
-	DeselectSlot()
-	-- Show delete cursor or mode indicator
-end
+-- Listen for UI events
+selectSlotRemote.Event:Connect(SelectSlot)
+deselectSlotRemote.Event:Connect(DeselectSlot)
 
-return BuildClient
+print("[BuildClient] Build system initialized")

@@ -10,8 +10,42 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Wait for build client
-local BuildClient = require(script.Parent:WaitForChild("BuildClient"))
+-- Create BuildEvents folder for communication
+local buildEvents = ReplicatedStorage:FindFirstChild("BuildEvents")
+if not buildEvents then
+	buildEvents = Instance.new("Folder")
+	buildEvents.Name = "BuildEvents"
+	buildEvents.Parent = ReplicatedStorage
+end
+
+-- Create events
+local slotSelected = buildEvents:FindFirstChild("SlotSelected")
+if not slotSelected then
+	slotSelected = Instance.new("BindableEvent")
+	slotSelected.Name = "SlotSelected"
+	slotSelected.Parent = buildEvents
+end
+
+local slotDeselected = buildEvents:FindFirstChild("SlotDeselected")
+if not slotDeselected then
+	slotDeselected = Instance.new("BindableEvent")
+	slotDeselected.Name = "SlotDeselected"
+	slotDeselected.Parent = buildEvents
+end
+
+local selectSlotRemote = buildEvents:FindFirstChild("SelectSlot")
+if not selectSlotRemote then
+	selectSlotRemote = Instance.new("BindableEvent")
+	selectSlotRemote.Name = "SelectSlot"
+	selectSlotRemote.Parent = buildEvents
+end
+
+local deselectSlotRemote = buildEvents:FindFirstChild("DeselectSlot")
+if not deselectSlotRemote then
+	deselectSlotRemote = Instance.new("BindableEvent")
+	deselectSlotRemote.Name = "DeselectSlot"
+	deselectSlotRemote.Parent = buildEvents
+end
 
 -- Create ScreenGui
 local screenGui = Instance.new("ScreenGui")
@@ -96,10 +130,10 @@ local function CreateSlotButton(slotIndex, slotData)
 	button.MouseButton1Click:Connect(function()
 		if selectedSlot == slotIndex then
 			-- Deselect
-			BuildClient.DeselectSlot()
+			deselectSlotRemote:Fire()
 		else
 			-- Select this slot
-			BuildClient.SelectSlot(slotIndex)
+			selectSlotRemote:Fire(slotIndex)
 		end
 	end)
 	
@@ -134,7 +168,7 @@ deleteCorner.Parent = deleteButton
 local deleteMode = false
 deleteButton.MouseButton1Click:Connect(function()
 	deleteMode = not deleteMode
-	BuildClient.DeselectSlot()
+	deselectSlotRemote:Fire()
 	
 	if deleteMode then
 		deleteButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
@@ -192,27 +226,6 @@ local function ClearSelection()
 end
 
 -- Listen for selection events
-local buildEvents = ReplicatedStorage:FindFirstChild("BuildEvents")
-if not buildEvents then
-	buildEvents = Instance.new("Folder")
-	buildEvents.Name = "BuildEvents"
-	buildEvents.Parent = ReplicatedStorage
-end
-
-local slotSelected = buildEvents:FindFirstChild("SlotSelected")
-if not slotSelected then
-	slotSelected = Instance.new("BindableEvent")
-	slotSelected.Name = "SlotSelected"
-	slotSelected.Parent = buildEvents
-end
-
-local slotDeselected = buildEvents:FindFirstChild("SlotDeselected")
-if not slotDeselected then
-	slotDeselected = Instance.new("BindableEvent")
-	slotDeselected.Name = "SlotDeselected"
-	slotDeselected.Parent = buildEvents
-end
-
 slotSelected.Event:Connect(UpdateSelectionVisuals)
 slotDeselected.Event:Connect(ClearSelection)
 
