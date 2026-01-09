@@ -12,6 +12,7 @@ local DamageService = require(ServerScriptService.Modules.DamageService)
 local BaseCoreHealth = require(ServerScriptService.Modules.BaseCoreHealth)
 local WaveManager = require(ServerScriptService.Modules.WaveManager)
 local StructureHealthService = require(ServerScriptService.Modules.StructureHealthService)
+local StructureSpawner = require(ServerScriptService.Modules.StructureSpawner)
 
 -- Game state
 local coreHealth = nil
@@ -159,11 +160,14 @@ local function StartRun()
 	print("✓ Game started - Wave 1 beginning!")
 end
 
--- Studio-only restart command
--- Listen for first player to join and allow restart via chat
+-- Studio-only testing commands
+-- Listen for first player to join and allow commands via chat
 Players.PlayerAdded:Connect(function(player)
 	-- Only listen to the first player (for testing)
 	if #Players:GetPlayers() == 1 then
+		-- Per-player rotation state for spawning
+		local rotationY = 0
+		
 		player.Chatted:Connect(function(message)
 			if message == "!restart" then
 				print("═══════════════════════════════")
@@ -172,9 +176,59 @@ Players.PlayerAdded:Connect(function(player)
 				StopRun()
 				task.wait(1) -- Brief delay for cleanup
 				StartRun()
+				
+			elseif message == "!wall" then
+				-- Spawn a wall in front of the player
+				local character = player.Character
+				if not character then
+					print("⚠ Cannot spawn wall: character not found")
+					return
+				end
+				
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					print("⚠ Cannot spawn wall: HumanoidRootPart not found")
+					return
+				end
+				
+				-- Position 12 studs in front of player
+				local lookVector = hrp.CFrame.LookVector
+				local spawnPosition = hrp.Position + (lookVector * 12)
+				
+				local wall = StructureSpawner.SpawnWall(spawnPosition, rotationY)
+				print("✓ Spawned wall at", spawnPosition, "with rotation", rotationY)
+				
+			elseif message == "!floor" then
+				-- Spawn a floor under the player
+				local character = player.Character
+				if not character then
+					print("⚠ Cannot spawn floor: character not found")
+					return
+				end
+				
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					print("⚠ Cannot spawn floor: HumanoidRootPart not found")
+					return
+				end
+				
+				-- Position at ground level (Y=0), using player's X/Z
+				local spawnPosition = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+				
+				local floor = StructureSpawner.SpawnFloor(spawnPosition, rotationY)
+				print("✓ Spawned floor at", spawnPosition, "with rotation", rotationY)
+				
+			elseif message == "!rot90" then
+				-- Toggle rotation between 0 and 90 degrees
+				rotationY = (rotationY == 0) and 90 or 0
+				print("✓ Rotation set to", rotationY, "degrees for next spawns")
 			end
 		end)
-		print("✓ Restart command enabled: type '!restart' to restart the game")
+		print("✓ Testing commands enabled:")
+		print("  - Type '!restart' to restart the game")
+		print("  - Type '!wall' to spawn a wall in front of you")
+		print("  - Type '!floor' to spawn a floor at your position")
+		print("  - Type '!rot90' to toggle rotation (0° or 90°)")
 	end
 end)
 
