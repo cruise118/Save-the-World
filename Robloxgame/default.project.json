@@ -17,14 +17,18 @@
       "$className": "StarterGui",
       "SizeControlGui": {
         "$className": "ScreenGui",
-        "ResetOnSpawn": false,
+        "$properties": {
+          "ResetOnSpawn": false
+        },
         "MainFrame": {
           "$path": "src/UI/SizeControlGui.lua"
         }
       },
       "PortalGui": {
         "$className": "ScreenGui",
-        "ResetOnSpawn": false,
+        "$properties": {
+          "ResetOnSpawn": false
+        },
         "MainFrame": {
           "$path": "src/UI/PortalGui.lua"
         }
