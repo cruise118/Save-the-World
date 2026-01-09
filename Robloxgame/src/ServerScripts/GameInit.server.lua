@@ -6,7 +6,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Load modules
 local DamageService = require(ServerScriptService.Modules.DamageService)
@@ -172,10 +172,19 @@ local function StartRun()
 	print("✓ Game started - Wave 1 beginning!")
 end
 
--- Studio-only testing commands using TextChatService
+-- Studio-only testing commands using RemoteEvent bridge
 -- Track first player and their rotation state
 local firstPlayer = nil
 local rotationY = 0
+
+-- Create RemoteEvent for chat commands (if not exists)
+local chatCommandRemote = ReplicatedStorage:FindFirstChild("ChatCommand")
+if not chatCommandRemote then
+	chatCommandRemote = Instance.new("RemoteEvent")
+	chatCommandRemote.Name = "ChatCommand"
+	chatCommandRemote.Parent = ReplicatedStorage
+	print("✓ Created ChatCommand RemoteEvent in ReplicatedStorage")
+end
 
 -- Listen for first player to join
 Players.PlayerAdded:Connect(function(player)
@@ -198,17 +207,17 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 end)
 
--- Listen for chat messages via TextChatService
-TextChatService.MessageReceived:Connect(function(textChatMessage)
-	-- Get the player who sent the message
-	local player = textChatMessage.TextSource and Players:GetPlayerByUserId(textChatMessage.TextSource.UserId)
-	
-	-- Only process messages from first player
-	if not player or player ~= firstPlayer then
+-- Listen for chat commands via RemoteEvent
+chatCommandRemote.OnServerEvent:Connect(function(player, message)
+	-- Only process commands from first player
+	if player ~= firstPlayer then
 		return
 	end
 	
-	local message = textChatMessage.Text
+	-- Validate message is a string
+	if typeof(message) ~= "string" then
+		return
+	end
 	
 	-- Check if message starts with !
 	if not message:match("^!") then

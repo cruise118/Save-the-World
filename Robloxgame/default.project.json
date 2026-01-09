@@ -32,6 +32,16 @@
       "GameInit": {
         "$path": "src/ServerScripts/GameInit.server.lua"
       }
+    },
+    
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "ChatCommandClient": {
+          "$path": "src/ClientScripts/ChatCommandClient.client.lua"
+        }
+      }
     }
   }
 }
