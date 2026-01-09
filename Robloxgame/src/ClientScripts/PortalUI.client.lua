@@ -256,6 +256,12 @@ end)
 -- Handle mouse click for portal placement
 mouse.Button1Down:Connect(function()
     if isSettingEntry then
+        -- Check if mouse hit something valid
+        if not mouse.Target then
+            updateStatus("Click on a surface (not sky)", Color3.fromRGB(255, 150, 100))
+            return
+        end
+        
         -- Set entry position
         entryPosition = mouse.Hit.Position
         entryRotation = 0
@@ -264,6 +270,12 @@ mouse.Button1Down:Connect(function()
         updateStatus("Click to set EXIT position", Color3.fromRGB(255, 150, 100))
         
     elseif isSettingExit then
+        -- Check if mouse hit something valid
+        if not mouse.Target then
+            updateStatus("Click on a surface (not sky)", Color3.fromRGB(255, 150, 100))
+            return
+        end
+        
         -- Set exit position and create portal
         local exitPosition = mouse.Hit.Position
         local exitRotation = 0

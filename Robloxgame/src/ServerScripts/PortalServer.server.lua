@@ -202,9 +202,32 @@ portalEvent.OnServerEvent:Connect(function(player, action, ...)
     if action == "create" then
         local entryPos, entryRot, exitPos, exitRot = ...
         
+        -- Debug logging
+        print(string.format("Portal creation request from %s", player.Name))
+        print("Entry position:", entryPos, "Type:", type(entryPos))
+        print("Exit position:", exitPos, "Type:", type(exitPos))
+        
         -- Validate positions
         if type(entryPos) ~= "Vector3" or type(exitPos) ~= "Vector3" then
+            local errorMsg = string.format("Invalid portal positions - Entry: %s (%s), Exit: %s (%s)", 
+                tostring(entryPos), type(entryPos), tostring(exitPos), type(exitPos))
+            warn(errorMsg)
             portalEvent:FireClient(player, "error", "Invalid portal positions")
+            return
+        end
+        
+        -- Check if positions are valid (not NaN or Inf)
+        if entryPos ~= entryPos or exitPos ~= exitPos then
+            warn("Portal positions contain NaN values")
+            portalEvent:FireClient(player, "error", "Invalid portal positions (NaN)")
+            return
+        end
+        
+        -- Check if positions are within reasonable bounds
+        local maxDistance = 10000
+        if entryPos.Magnitude > maxDistance or exitPos.Magnitude > maxDistance then
+            warn("Portal positions too far from origin")
+            portalEvent:FireClient(player, "error", "Portal positions too far from origin")
             return
         end
         
