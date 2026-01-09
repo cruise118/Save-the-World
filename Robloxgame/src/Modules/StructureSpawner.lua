@@ -28,6 +28,17 @@ local function GetStructuresFolder()
 	return folder
 end
 
+-- Get or create the Traps folder in workspace
+local function GetTrapsFolder()
+	local folder = workspace:FindFirstChild("Traps")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Traps"
+		folder.Parent = workspace
+	end
+	return folder
+end
+
 -- Spawn a wall structure
 function StructureSpawner.SpawnWall(position: Vector3, orientationY: number?): Part
 	assert(RunService:IsServer(), "StructureSpawner must run on the server")
@@ -110,8 +121,8 @@ function StructureSpawner.SpawnSpikeTrap(position: Vector3, orientationY: number
 		trap.Orientation = Vector3.new(0, orientationY, 0)
 	end
 	
-	-- Parent to workspace (traps don't need structure tag, they're managed by TrapService)
-	trap.Parent = GetStructuresFolder()
+	-- Parent to workspace.Traps (traps don't need structure tag, they're managed by TrapService)
+	trap.Parent = GetTrapsFolder()
 	
 	return trap
 end

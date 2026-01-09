@@ -268,7 +268,7 @@ Players.PlayerAdded:Connect(function(player)
 		print("  - Type '!restart' to restart the game")
 		print("  - Type '!wall' to spawn a wall in front of you")
 		print("  - Type '!floor' to spawn a floor at your position")
-		print("  - Type '!trap' to spawn a spike trap in front of you")
+		print("  - Type '!trap' to spawn a spike trap in front of you (spawns in workspace.Traps)")
 		print("  - Type '!rot90' to toggle rotation (0° or 90°)")
 	end
 end)

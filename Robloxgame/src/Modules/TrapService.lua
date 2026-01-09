@@ -129,17 +129,20 @@ end
 function TrapService:Unregister(trapId)
 	assert(RunService:IsServer(), "Unregister must run on the server")
 	
+	-- Re-entrancy guard: if trap doesn't exist, no-op
 	local trap = self.traps[trapId]
 	if not trap then
 		return
 	end
 	
-	-- Disconnect connections
+	-- Disconnect connections safely
 	if trap.connection then
 		trap.connection:Disconnect()
+		trap.connection = nil
 	end
 	if trap.ancestryConnection then
 		trap.ancestryConnection:Disconnect()
+		trap.ancestryConnection = nil
 	end
 	
 	-- Clear cooldowns
@@ -159,8 +162,14 @@ end
 function TrapService:Destroy()
 	assert(RunService:IsServer(), "Destroy must run on the server")
 	
-	-- Unregister all traps
+	-- Collect trap IDs first to avoid mutating table while iterating
+	local trapIds = {}
 	for trapId, _ in pairs(self.traps) do
+		table.insert(trapIds, trapId)
+	end
+	
+	-- Unregister all traps
+	for _, trapId in ipairs(trapIds) do
 		self:Unregister(trapId)
 	end
 	
