@@ -144,6 +144,7 @@ end
 ]]
 function ZombieAI:Stop()
 	self.isActive = false
+	self._loopRunning = false
 	
 	-- Halt movement
 	if self.humanoid and self.humanoid.Parent and self.rootPart and self.rootPart.Parent then
@@ -207,6 +208,11 @@ end
 	Move state: Pathfind toward current target
 ]]
 function ZombieAI:UpdateMove()
+	-- Validate target still exists first
+	if not self.currentTarget or not self.currentTarget.Parent then
+		self.currentTarget = self.baseCore
+	end
+	
 	-- Check if we should update target (reduce jitter with threshold)
 	local nearestStructure, nearestDistance = self:FindNearestStructure()
 	if nearestStructure and nearestStructure ~= self.currentTarget then
@@ -216,11 +222,6 @@ function ZombieAI:UpdateMove()
 			self.currentTarget = nearestStructure
 			self.currentPath = nil -- Force path recalculation
 		end
-	end
-	
-	-- Validate target still exists
-	if not self.currentTarget or not self.currentTarget.Parent then
-		self.currentTarget = self.baseCore
 	end
 	
 	-- Check if in attack range

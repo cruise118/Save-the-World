@@ -64,8 +64,8 @@ function StructureHealthService:Register(part)
 		part:SetAttribute("Health", part:GetAttribute("MaxHealth"))
 	end
 	
-	-- Mark as not destroyed
-	if not part:GetAttribute("Destroyed") then
+	-- Mark as not destroyed (only set if nil to avoid overwriting false)
+	if part:GetAttribute("Destroyed") == nil then
 		part:SetAttribute("Destroyed", false)
 	end
 	
@@ -108,7 +108,7 @@ end
 function StructureHealthService:Damage(part, amount, source)
 	assert(RunService:IsServer(), "Damage must be called on the server")
 	assert(typeof(part) == "Instance" and part:IsA("BasePart"), "part must be a BasePart")
-	assert(type(amount) == "number" and amount > 0, "amount must be a positive number")
+	assert(typeof(amount) == "number" and amount > 0, "amount must be a positive number")
 	
 	-- Auto-register if tagged but not registered
 	if not self.registered[part] and CollectionService:HasTag(part, "Structure") then

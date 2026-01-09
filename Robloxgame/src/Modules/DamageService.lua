@@ -66,6 +66,11 @@ function DamageService.SetStructureDamageHandler(fn)
 	assert(fn == nil or typeof(fn) == "function", "handler must be a function or nil")
 	
 	structureDamageHandler = fn
+	
+	-- Clear warning cache when handler is set to avoid stale warnings
+	if fn then
+		warningCache = {}
+	end
 end
 
 --[[
