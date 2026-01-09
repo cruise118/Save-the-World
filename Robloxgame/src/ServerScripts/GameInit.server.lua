@@ -6,6 +6,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
 
 -- Load modules
 local DamageService = require(ServerScriptService.Modules.DamageService)
@@ -171,105 +172,131 @@ local function StartRun()
 	print("✓ Game started - Wave 1 beginning!")
 end
 
--- Studio-only testing commands
--- Listen for first player to join and allow commands via chat
+-- Studio-only testing commands using TextChatService
+-- Track first player and their rotation state
+local firstPlayer = nil
+local rotationY = 0
+
+-- Listen for first player to join
 Players.PlayerAdded:Connect(function(player)
-	-- Only listen to the first player (for testing)
 	if #Players:GetPlayers() == 1 then
-		-- Per-player rotation state for spawning
-		local rotationY = 0
-		
-		player.Chatted:Connect(function(message)
-			if message == "!restart" then
-				print("═══════════════════════════════")
-				print("  Restarting game...")
-				print("═══════════════════════════════")
-				StopRun()
-				task.wait(1) -- Brief delay for cleanup
-				StartRun()
-				
-			elseif message == "!wall" then
-				-- Spawn a wall in front of the player
-				local character = player.Character
-				if not character then
-					print("⚠ Cannot spawn wall: character not found")
-					return
-				end
-				
-				local hrp = character:FindFirstChild("HumanoidRootPart")
-				if not hrp then
-					print("⚠ Cannot spawn wall: HumanoidRootPart not found")
-					return
-				end
-				
-				-- Position 12 studs in front of player
-				local lookVector = hrp.CFrame.LookVector
-				local spawnPosition = hrp.Position + (lookVector * 12)
-				
-				local wall = StructureSpawner.SpawnWall(spawnPosition, rotationY)
-				print("✓ Spawned wall at", spawnPosition, "with rotation", rotationY)
-				
-			elseif message == "!floor" then
-				-- Spawn a floor under the player
-				local character = player.Character
-				if not character then
-					print("⚠ Cannot spawn floor: character not found")
-					return
-				end
-				
-				local hrp = character:FindFirstChild("HumanoidRootPart")
-				if not hrp then
-					print("⚠ Cannot spawn floor: HumanoidRootPart not found")
-					return
-				end
-				
-				-- Position at ground level (Y=0), using player's X/Z
-				local spawnPosition = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
-				
-				local floor = StructureSpawner.SpawnFloor(spawnPosition, rotationY)
-				print("✓ Spawned floor at", spawnPosition, "with rotation", rotationY)
-				
-			elseif message == "!rot90" then
-				-- Toggle rotation between 0 and 90 degrees
-				rotationY = (rotationY == 0) and 90 or 0
-				print("✓ Rotation set to", rotationY, "degrees for next spawns")
-				
-			elseif message == "!trap" then
-				-- Spawn a spike trap in front of the player
-				local character = player.Character
-				if not character then
-					print("⚠ Cannot spawn trap: character not found")
-					return
-				end
-				
-				local hrp = character:FindFirstChild("HumanoidRootPart")
-				if not hrp then
-					print("⚠ Cannot spawn trap: HumanoidRootPart not found")
-					return
-				end
-				
-				-- Position 8 studs in front of player
-				local lookVector = hrp.CFrame.LookVector
-				local spawnPosition = hrp.Position + (lookVector * 8)
-				-- Align to ground
-				spawnPosition = Vector3.new(spawnPosition.X, 0.25, spawnPosition.Z)
-				
-				local trap = StructureSpawner.SpawnSpikeTrap(spawnPosition, rotationY)
-				-- Register with trap service
-				if trapService then
-					trapService:RegisterSpikeTrap(trap)
-					print("✓ Spawned spike trap at", spawnPosition)
-				else
-					print("⚠ Trap service not initialized")
-				end
-			end
-		end)
-		print("✓ Testing commands enabled:")
+		firstPlayer = player
+		print("✓ Testing commands enabled for", player.Name)
 		print("  - Type '!restart' to restart the game")
 		print("  - Type '!wall' to spawn a wall in front of you")
 		print("  - Type '!floor' to spawn a floor at your position")
 		print("  - Type '!trap' to spawn a spike trap in front of you (spawns in workspace.Traps)")
 		print("  - Type '!rot90' to toggle rotation (0° or 90°)")
+	end
+end)
+
+-- Handle player leaving
+Players.PlayerRemoving:Connect(function(player)
+	if player == firstPlayer then
+		firstPlayer = nil
+		rotationY = 0
+	end
+end)
+
+-- Listen for chat messages via TextChatService
+TextChatService.MessageReceived:Connect(function(textChatMessage)
+	-- Get the player who sent the message
+	local player = textChatMessage.TextSource and Players:GetPlayerByUserId(textChatMessage.TextSource.UserId)
+	
+	-- Only process messages from first player
+	if not player or player ~= firstPlayer then
+		return
+	end
+	
+	local message = textChatMessage.Text
+	
+	-- Check if message starts with !
+	if not message:match("^!") then
+		return
+	end
+	
+	if message == "!restart" then
+		print("═══════════════════════════════")
+		print("  Restarting game...")
+		print("═══════════════════════════════")
+		StopRun()
+		task.wait(1) -- Brief delay for cleanup
+		StartRun()
+		
+	elseif message == "!wall" then
+		-- Spawn a wall in front of the player
+		local character = player.Character
+		if not character then
+			print("⚠ Cannot spawn wall: character not found")
+			return
+		end
+		
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			print("⚠ Cannot spawn wall: HumanoidRootPart not found")
+			return
+		end
+		
+		-- Position 12 studs in front of player
+		local lookVector = hrp.CFrame.LookVector
+		local spawnPosition = hrp.Position + (lookVector * 12)
+		
+		local wall = StructureSpawner.SpawnWall(spawnPosition, rotationY)
+		print("✓ Spawned wall at", spawnPosition, "with rotation", rotationY)
+		
+	elseif message == "!floor" then
+		-- Spawn a floor under the player
+		local character = player.Character
+		if not character then
+			print("⚠ Cannot spawn floor: character not found")
+			return
+		end
+		
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			print("⚠ Cannot spawn floor: HumanoidRootPart not found")
+			return
+		end
+		
+		-- Position at ground level (Y=0), using player's X/Z
+		local spawnPosition = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+		
+		local floor = StructureSpawner.SpawnFloor(spawnPosition, rotationY)
+		print("✓ Spawned floor at", spawnPosition, "with rotation", rotationY)
+		
+	elseif message == "!rot90" then
+		-- Toggle rotation between 0 and 90 degrees
+		rotationY = (rotationY == 0) and 90 or 0
+		print("✓ Rotation set to", rotationY, "degrees for next spawns")
+		
+	elseif message == "!trap" then
+		-- Spawn a spike trap in front of the player
+		local character = player.Character
+		if not character then
+			print("⚠ Cannot spawn trap: character not found")
+			return
+		end
+		
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then
+			print("⚠ Cannot spawn trap: HumanoidRootPart not found")
+			return
+		end
+		
+		-- Position 8 studs in front of player
+		local lookVector = hrp.CFrame.LookVector
+		local spawnPosition = hrp.Position + (lookVector * 8)
+		-- Align to ground
+		spawnPosition = Vector3.new(spawnPosition.X, 0.25, spawnPosition.Z)
+		
+		local trap = StructureSpawner.SpawnSpikeTrap(spawnPosition, rotationY)
+		-- Register with trap service
+		if trapService then
+			trapService:RegisterSpikeTrap(trap)
+			print("✓ Spawned spike trap at", spawnPosition)
+		else
+			print("⚠ Trap service not initialized")
+		end
 	end
 end)
 
