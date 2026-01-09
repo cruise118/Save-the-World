@@ -27,6 +27,9 @@
         },
         "TrapService": {
           "$path": "src/Modules/TrapService.lua"
+        },
+        "BuildService": {
+          "$path": "src/Modules/BuildService.lua"
         }
       },
       "GameInit": {
@@ -40,6 +43,12 @@
         "$className": "StarterPlayerScripts",
         "ChatCommandClient": {
           "$path": "src/ClientScripts/ChatCommandClient.client.lua"
+        },
+        "BuildClient": {
+          "$path": "src/ClientScripts/BuildClient.client.lua"
+        },
+        "BuildUI": {
+          "$path": "src/ClientScripts/BuildUI.client.lua"
         }
       }
     }

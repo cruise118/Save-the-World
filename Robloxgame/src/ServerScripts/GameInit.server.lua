@@ -15,12 +15,14 @@ local WaveManager = require(ServerScriptService.Modules.WaveManager)
 local StructureHealthService = require(ServerScriptService.Modules.StructureHealthService)
 local StructureSpawner = require(ServerScriptService.Modules.StructureSpawner)
 local TrapService = require(ServerScriptService.Modules.TrapService)
+local BuildService = require(ServerScriptService.Modules.BuildService)
 
 -- Game state
 local coreHealth = nil
 local structureHealth = nil
 local trapService = nil
 local waveManager = nil
+local buildService = nil
 local gameOverConn = nil
 
 -- Find required objects (once)
@@ -61,6 +63,12 @@ local function StopRun()
 	if waveManager then
 		waveManager:Stop()
 		waveManager = nil
+	end
+	
+	-- Cleanup build service
+	if buildService then
+		buildService:Destroy()
+		buildService = nil
 	end
 	
 	-- Cleanup trap service
@@ -129,6 +137,14 @@ local function StartRun()
 	})
 	print("✓ Trap Service initialized")
 	
+	-- Create build service
+	buildService = BuildService.new({
+		maxBuildDistance = 50,
+		debug = false
+	})
+	buildService:SetTrapService(trapService)
+	print("✓ Build Service initialized")
+	
 	-- Create wave manager
 	waveManager = WaveManager.new({
 		baseCoreHealth = coreHealth,
@@ -172,12 +188,87 @@ local function StartRun()
 	print("✓ Game started - Wave 1 beginning!")
 end
 
--- Studio-only testing commands using RemoteEvent bridge
--- Track first player and their rotation state
-local firstPlayer = nil
-local rotationY = 0
+-- Create RemoteEvents for building system
+local buildRemotesFolder = ReplicatedStorage:FindFirstChild("BuildRemotes")
+if not buildRemotesFolder then
+	buildRemotesFolder = Instance.new("Folder")
+	buildRemotesFolder.Name = "BuildRemotes"
+	buildRemotesFolder.Parent = ReplicatedStorage
+end
 
--- Create RemoteEvent for chat commands (if not exists)
+local placeStructureRemote = buildRemotesFolder:FindFirstChild("PlaceStructure")
+if not placeStructureRemote then
+	placeStructureRemote = Instance.new("RemoteEvent")
+	placeStructureRemote.Name = "PlaceStructure"
+	placeStructureRemote.Parent = buildRemotesFolder
+end
+
+local deleteStructureRemote = buildRemotesFolder:FindFirstChild("DeleteStructure")
+if not deleteStructureRemote then
+	deleteStructureRemote = Instance.new("RemoteEvent")
+	deleteStructureRemote.Name = "DeleteStructure"
+	deleteStructureRemote.Parent = buildRemotesFolder
+end
+
+print("✓ Created BuildRemotes in ReplicatedStorage")
+
+-- Handle structure placement
+placeStructureRemote.OnServerEvent:Connect(function(player, structureType, position, rotation)
+	if not buildService then
+		warn("[BuildService] Service not initialized")
+		return
+	end
+	
+	-- Validate inputs
+	if typeof(structureType) ~= "string" or typeof(position) ~= "Vector3" or typeof(rotation) ~= "number" then
+		warn("[BuildService] Invalid parameters from", player.Name)
+		return
+	end
+	
+	local success, part, err
+	
+	if structureType == "floor" then
+		success, part, err = buildService:PlaceFloor(player, position, rotation)
+	elseif structureType == "wall" then
+		success, part, err = buildService:PlaceWall(player, position, rotation)
+	elseif structureType == "trap" then
+		-- Find floor at position
+		local floor = buildService:GetFloorAtPosition(position)
+		if floor then
+			success, part, err = buildService:PlaceFloorTrap(player, floor, "spike")
+		else
+			success, part, err = false, nil, "No floor found at this location"
+		end
+	else
+		warn("[BuildService] Unknown structure type:", structureType)
+		return
+	end
+	
+	if not success then
+		warn("[BuildService]", player.Name, "failed to place", structureType .. ":", err)
+	end
+end)
+
+-- Handle structure deletion
+deleteStructureRemote.OnServerEvent:Connect(function(player, part)
+	if not buildService then
+		warn("[BuildService] Service not initialized")
+		return
+	end
+	
+	if typeof(part) ~= "Instance" or not part:IsA("BasePart") then
+		warn("[BuildService] Invalid part from", player.Name)
+		return
+	end
+	
+	local success, err = buildService:DeleteStructure(player, part)
+	
+	if not success then
+		warn("[BuildService]", player.Name, "failed to delete structure:", err)
+	end
+end)
+
+-- Create RemoteEvent for chat commands (kept for !restart command only)
 local chatCommandRemote = ReplicatedStorage:FindFirstChild("ChatCommand")
 if not chatCommandRemote then
 	chatCommandRemote = Instance.new("RemoteEvent")
@@ -186,16 +277,20 @@ if not chatCommandRemote then
 	print("✓ Created ChatCommand RemoteEvent in ReplicatedStorage")
 end
 
+-- Track first player for restart command
+local firstPlayer = nil
+
 -- Listen for first player to join
 Players.PlayerAdded:Connect(function(player)
 	if #Players:GetPlayers() == 1 then
 		firstPlayer = player
-		print("✓ Testing commands enabled for", player.Name)
+		print("✓ Building system enabled for all players")
+		print("✓ Restart command enabled for", player.Name)
+		print("  - Use the hotbar at the bottom of the screen to build")
+		print("  - Press 1, 2, 3 for Floor, Wall, Trap")
+		print("  - Press R to rotate placement")
+		print("  - Click delete button to remove structures")
 		print("  - Type '!restart' to restart the game")
-		print("  - Type '!wall' to spawn a wall in front of you")
-		print("  - Type '!floor' to spawn a floor at your position")
-		print("  - Type '!trap' to spawn a spike trap in front of you (spawns in workspace.Traps)")
-		print("  - Type '!rot90' to toggle rotation (0° or 90°)")
 	end
 end)
 
@@ -203,11 +298,10 @@ end)
 Players.PlayerRemoving:Connect(function(player)
 	if player == firstPlayer then
 		firstPlayer = nil
-		rotationY = 0
 	end
 end)
 
--- Listen for chat commands via RemoteEvent
+-- Listen for chat commands via RemoteEvent (only !restart now)
 chatCommandRemote.OnServerEvent:Connect(function(player, message)
 	-- Only process commands from first player
 	if player ~= firstPlayer then
@@ -231,81 +325,6 @@ chatCommandRemote.OnServerEvent:Connect(function(player, message)
 		StopRun()
 		task.wait(1) -- Brief delay for cleanup
 		StartRun()
-		
-	elseif message == "!wall" then
-		-- Spawn a wall in front of the player
-		local character = player.Character
-		if not character then
-			print("⚠ Cannot spawn wall: character not found")
-			return
-		end
-		
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if not hrp then
-			print("⚠ Cannot spawn wall: HumanoidRootPart not found")
-			return
-		end
-		
-		-- Position 12 studs in front of player
-		local lookVector = hrp.CFrame.LookVector
-		local spawnPosition = hrp.Position + (lookVector * 12)
-		
-		local wall = StructureSpawner.SpawnWall(spawnPosition, rotationY)
-		print("✓ Spawned wall at", spawnPosition, "with rotation", rotationY)
-		
-	elseif message == "!floor" then
-		-- Spawn a floor under the player
-		local character = player.Character
-		if not character then
-			print("⚠ Cannot spawn floor: character not found")
-			return
-		end
-		
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if not hrp then
-			print("⚠ Cannot spawn floor: HumanoidRootPart not found")
-			return
-		end
-		
-		-- Position at ground level (Y=0), using player's X/Z
-		local spawnPosition = Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
-		
-		local floor = StructureSpawner.SpawnFloor(spawnPosition, rotationY)
-		print("✓ Spawned floor at", spawnPosition, "with rotation", rotationY)
-		
-	elseif message == "!rot90" then
-		-- Toggle rotation between 0 and 90 degrees
-		rotationY = (rotationY == 0) and 90 or 0
-		print("✓ Rotation set to", rotationY, "degrees for next spawns")
-		
-	elseif message == "!trap" then
-		-- Spawn a spike trap in front of the player
-		local character = player.Character
-		if not character then
-			print("⚠ Cannot spawn trap: character not found")
-			return
-		end
-		
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if not hrp then
-			print("⚠ Cannot spawn trap: HumanoidRootPart not found")
-			return
-		end
-		
-		-- Position 8 studs in front of player
-		local lookVector = hrp.CFrame.LookVector
-		local spawnPosition = hrp.Position + (lookVector * 8)
-		-- Align to ground
-		spawnPosition = Vector3.new(spawnPosition.X, 0.25, spawnPosition.Z)
-		
-		local trap = StructureSpawner.SpawnSpikeTrap(spawnPosition, rotationY)
-		-- Register with trap service
-		if trapService then
-			trapService:RegisterSpikeTrap(trap)
-			print("✓ Spawned spike trap at", spawnPosition)
-		else
-			print("⚠ Trap service not initialized")
-		end
 	end
 end)
 
