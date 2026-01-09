@@ -233,22 +233,46 @@ function ZombieAI:UpdateMove()
 		if self.currentTarget ~= nearestPlayer then
 			self.currentTarget = nearestPlayer
 			self.currentPath = nil -- Force path recalculation
+			self.lastPathUpdateTime = 0 -- Force immediate path update
 		end
 	else
-		-- No player nearby, check structures or base core
-		-- Validate current target still exists
-		if not self.currentTarget or not self.currentTarget.Parent then
-			self.currentTarget = self.baseCore
+		-- No player nearby, check if we were targeting a player and need to switch
+		if self.currentTarget and self.currentTarget:IsA("Player") then
+			-- Player left range, switch to structure or base core
+			self.currentTarget = nil
+			self.currentPath = nil -- Force path recalculation
+			self.lastPathUpdateTime = 0 -- Force immediate path update
 		end
 		
-		-- Check if we should update target (reduce jitter with threshold)
-		local nearestStructure, nearestDistance = self:FindNearestStructure()
-		if nearestStructure and nearestStructure ~= self.currentTarget then
-			-- Only switch if meaningfully closer (20% threshold)
-			local currentTargetDistance = (self.rootPart.Position - self.currentTarget.Position).Magnitude
-			if nearestDistance < currentTargetDistance * 0.8 then
+		-- Validate current target still exists
+		if not self.currentTarget or not self.currentTarget.Parent then
+			self.currentTarget = nil
+		end
+		
+		-- If no current target or it's a player (shouldn't be at this point), find structure
+		if not self.currentTarget then
+			local nearestStructure, _ = self:FindNearestStructure()
+			if nearestStructure then
 				self.currentTarget = nearestStructure
-				self.currentPath = nil -- Force path recalculation
+			else
+				self.currentTarget = self.baseCore
+			end
+			self.currentPath = nil -- Force path recalculation
+			self.lastPathUpdateTime = 0 -- Force immediate path update
+		else
+			-- We have a valid non-player target, check if we should switch to a closer structure
+			local nearestStructure, nearestDistance = self:FindNearestStructure()
+			if nearestStructure and nearestStructure ~= self.currentTarget then
+				-- Only switch if meaningfully closer (20% threshold to prevent jitter)
+				local targetPos = self:GetTargetPosition(self.currentTarget)
+				if targetPos then
+					local currentTargetDistance = (self.rootPart.Position - targetPos).Magnitude
+					if nearestDistance < currentTargetDistance * 0.8 then
+						self.currentTarget = nearestStructure
+						self.currentPath = nil -- Force path recalculation
+						self.lastPathUpdateTime = 0 -- Force immediate path update
+					end
+				end
 			end
 		end
 	end
@@ -256,6 +280,7 @@ function ZombieAI:UpdateMove()
 	-- Get current target position (handle players vs parts)
 	local targetPosition = self:GetTargetPosition(self.currentTarget)
 	if not targetPosition then
+		-- Target is invalid, go back to idle to find new target
 		self:SetState(State.Idle)
 		return
 	end
@@ -267,7 +292,7 @@ function ZombieAI:UpdateMove()
 		return
 	end
 	
-	-- Update pathfinding more frequently
+	-- Update pathfinding periodically
 	local currentTime = time()
 	if not self.currentPath or (currentTime - self.lastPathUpdateTime) >= self.config.pathfindingUpdateInterval then
 		self:CalculatePath(targetPosition)
@@ -294,6 +319,17 @@ end
 	Attack state: Damage target at intervals
 ]]
 function ZombieAI:UpdateAttack()
+	-- Check if we're attacking a player and they've left detection range entirely
+	if self.currentTarget and self.currentTarget:IsA("Player") then
+		local playerInRange = self:FindNearestPlayer()
+		if not playerInRange or playerInRange ~= self.currentTarget then
+			-- Player left range, go back to idle to find new target
+			self.currentTarget = nil
+			self:SetState(State.Idle)
+			return
+		end
+	end
+	
 	-- Get current target position
 	local targetPosition = self:GetTargetPosition(self.currentTarget)
 	if not targetPosition then
