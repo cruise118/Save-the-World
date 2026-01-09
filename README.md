@@ -11,7 +11,7 @@ Save-the-World/
 └── Robloxgame/
     ├── default.project.json  # Rojo project configuration
     └── src/
-        └── Script.lua        # Main game script
+        └── MakeBigScript.lua # Test script to verify Rojo setup
 ```
 
 ## Getting Started
@@ -28,7 +28,7 @@ Save-the-World/
 5. Connect to Rojo from Roblox Studio
 
 ## Development
-The test script is located in `Robloxgame/src/Script.lua`. This script runs in ServerScriptService and will make your character 3x bigger when you spawn, which helps verify that Rojo syncing is working correctly.
+The test script is located in `Robloxgame/src/MakeBigScript.lua`. This script runs in ServerScriptService as a Script (not ModuleScript) and will make your character 3x bigger when you spawn, which helps verify that Rojo syncing is working correctly.
 
 ### Testing Rojo Setup
 1. Run `rojo serve` in the Robloxgame directory
