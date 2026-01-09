@@ -9,7 +9,19 @@
         "$className": "Folder",
         "ZombieAI": {
           "$path": "src/Modules/ZombieAI.lua"
+        },
+        "BaseCoreHealth": {
+          "$path": "src/Modules/BaseCoreHealth.lua"
+        },
+        "DamageService": {
+          "$path": "src/Modules/DamageService.lua"
+        },
+        "WaveManager": {
+          "$path": "src/Modules/WaveManager.lua"
         }
+      },
+      "GameInit": {
+        "$path": "src/ServerScripts/GameInit.server.lua"
       }
     }
   }
