@@ -28,7 +28,9 @@ local DEFAULT_CONFIG = {
 	
 	-- Detection
 	structureDetectionRange = 18,
-	playerDetectionRange = 25,
+	playerAcquireRange = 25, -- Range to start chasing player
+	playerLoseRange = 32, -- Range to stop chasing player (hysteresis)
+	playerCommitTime = 1.0, -- Seconds to keep chasing player before reconsidering
 	
 	-- Movement
 	moveSpeed = 14, -- Slower than default player speed (16)
@@ -91,10 +93,12 @@ function ZombieAI.new(model, baseCore, config)
 	-- State management
 	self.state = State.Idle
 	self.currentTarget = nil -- Current structure or base core being targeted
+	self.currentTargetType = "BaseCore" -- "BaseCore" | "Structure" | "Player"
 	
 	-- Timers
 	self.lastAttackTime = 0
 	self.lastPathUpdateTime = 0
+	self.lastTargetSwitchTime = 0 -- Track when we last switched targets
 	
 	-- Pathfinding
 	self.currentPath = nil
@@ -220,13 +224,32 @@ end
 	Idle state: Find a target and transition to move
 ]]
 function ZombieAI:UpdateIdle()
-	-- Find nearest structure or use base core (player checks done in idle only for MVP)
-	local target, _ = self:FindNearestStructure()
-	if not target then
-		target = self.baseCore
+	-- Priority: Player > Structure > Base Core
+	
+	-- First check for nearby players
+	local nearestPlayer = self:FindNearestPlayer()
+	if nearestPlayer then
+		self.currentTarget = nearestPlayer
+		self.currentTargetType = "Player"
+		self.lastTargetSwitchTime = time()
+		self:SetState(State.MoveToTarget)
+		return
 	end
 	
-	self.currentTarget = target
+	-- Then check for structures
+	local target, _ = self:FindNearestStructure()
+	if target then
+		self.currentTarget = target
+		self.currentTargetType = "Structure"
+		self.lastTargetSwitchTime = time()
+		self:SetState(State.MoveToTarget)
+		return
+	end
+	
+	-- Fall back to base core
+	self.currentTarget = self.baseCore
+	self.currentTargetType = "BaseCore"
+	self.lastTargetSwitchTime = time()
 	self:SetState(State.MoveToTarget)
 end
 
@@ -234,33 +257,99 @@ end
 	Move state: Pathfind toward current target
 ]]
 function ZombieAI:UpdateMove()
-	-- Validate current target still exists
-	if not self.currentTarget or not self.currentTarget.Parent then
-		self.currentTarget = nil
-	end
+	local currentTime = time()
 	
-	-- If no current target, find structure or base core
-	if not self.currentTarget then
-		local nearestStructure, _ = self:FindNearestStructure()
-		if nearestStructure then
-			self.currentTarget = nearestStructure
+	-- Handle player targeting with hysteresis and commit time
+	if self.currentTargetType == "Player" then
+		-- Currently chasing a player
+		local timeSinceSwitch = currentTime - self.lastTargetSwitchTime
+		local shouldDropPlayer = false
+		
+		-- Check if player is still valid
+		if not self.currentTarget or not self.currentTarget:IsA("Player") then
+			shouldDropPlayer = true
+		elseif self.currentTarget.Character then
+			local humanoid = self.currentTarget.Character:FindFirstChildOfClass("Humanoid")
+			local rootPart = self.currentTarget.Character:FindFirstChild("HumanoidRootPart")
+			
+			if not humanoid or not rootPart or humanoid.Health <= 0 then
+				shouldDropPlayer = true
+			else
+				-- Check distance with playerLoseRange (hysteresis)
+				local distance = (self.rootPart.Position - rootPart.Position).Magnitude
+				if distance > self.config.playerLoseRange then
+					shouldDropPlayer = true
+				end
+			end
 		else
-			self.currentTarget = self.baseCore
+			shouldDropPlayer = true
 		end
-		self.currentPath = nil -- Force path recalculation
-		self.lastTargetPosition = nil -- Clear for movement detection
+		
+		-- Keep chasing for at least playerCommitTime before dropping
+		if shouldDropPlayer and timeSinceSwitch >= self.config.playerCommitTime then
+			-- Drop player target, find structure or base core
+			self.currentTarget = nil
+			self.currentTargetType = "BaseCore"
+			local nearestStructure, _ = self:FindNearestStructure()
+			if nearestStructure then
+				self.currentTarget = nearestStructure
+				self.currentTargetType = "Structure"
+			else
+				self.currentTarget = self.baseCore
+			end
+			self.lastTargetSwitchTime = currentTime
+			self.currentPath = nil
+			self.lastTargetPosition = nil
+		end
 	else
-		-- We have a valid target, check if we should switch to a closer structure
-		local nearestStructure, nearestDistance = self:FindNearestStructure()
-		if nearestStructure and nearestStructure ~= self.currentTarget then
-			-- Only switch if meaningfully closer (20% threshold to prevent jitter)
-			local targetPos = self:GetTargetPosition(self.currentTarget)
-			if targetPos then
-				local currentTargetDistance = (self.rootPart.Position - targetPos).Magnitude
-				if nearestDistance < currentTargetDistance * 0.8 then
+		-- Currently targeting structure or base core
+		-- Check if a player came into acquisition range
+		if (currentTime - self.lastTargetSwitchTime) > 0.5 then
+			local nearestPlayer = self:FindNearestPlayer()
+			if nearestPlayer then
+				-- Switch to player
+				self.currentTarget = nearestPlayer
+				self.currentTargetType = "Player"
+				self.lastTargetSwitchTime = currentTime
+				self.currentPath = nil
+				self.lastTargetPosition = nil
+			end
+		end
+		
+		-- Also check if we should switch structures
+		if self.currentTargetType == "Structure" then
+			-- Validate current target still exists
+			if not self.currentTarget or not self.currentTarget.Parent then
+				self.currentTarget = nil
+			end
+			
+			-- If no current target, find structure or base core
+			if not self.currentTarget then
+				local nearestStructure, _ = self:FindNearestStructure()
+				if nearestStructure then
 					self.currentTarget = nearestStructure
-					self.currentPath = nil -- Force path recalculation
-					self.lastTargetPosition = nil -- Clear for movement detection
+					self.currentTargetType = "Structure"
+				else
+					self.currentTarget = self.baseCore
+					self.currentTargetType = "BaseCore"
+				end
+				self.currentPath = nil
+				self.lastTargetPosition = nil
+			else
+				-- We have a valid structure target, check if we should switch to a closer one
+				local nearestStructure, nearestDistance = self:FindNearestStructure()
+				if nearestStructure and nearestStructure ~= self.currentTarget then
+					-- Only switch if meaningfully closer (20% threshold to prevent jitter)
+					local targetPos = self:GetTargetPosition(self.currentTarget)
+					if targetPos then
+						local currentTargetDistance = (self.rootPart.Position - targetPos).Magnitude
+						if nearestDistance < currentTargetDistance * 0.8 then
+							self.currentTarget = nearestStructure
+							self.currentTargetType = "Structure"
+							self.currentPath = nil
+							self.lastTargetPosition = nil
+						end
+					end
 				end
 			end
 		end
@@ -283,7 +372,6 @@ function ZombieAI:UpdateMove()
 	
 	-- Determine if we need to recalculate path
 	local needsRecalc = false
-	local currentTime = time()
 	
 	if not self.currentPath then
 		needsRecalc = true
@@ -331,7 +419,17 @@ function ZombieAI:UpdateAttack()
 		return
 	end
 	
-	-- Check if still in range
+	-- If attacking a player, check if they're still in lose range
+	if self.currentTargetType == "Player" then
+		local distanceToTarget = (self.rootPart.Position - targetPosition).Magnitude
+		if distanceToTarget > self.config.playerLoseRange then
+			-- Player escaped, return to idle
+			self:SetState(State.Idle)
+			return
+		end
+	end
+	
+	-- Check if still in attack range
 	local distanceToTarget = (self.rootPart.Position - targetPosition).Magnitude
 	if distanceToTarget > self.config.attackRange then
 		self:SetState(State.MoveToTarget)
@@ -363,13 +461,13 @@ function ZombieAI:PerformAttack(target)
 end
 
 --[[
-	Finds the nearest player within detection range
+	Finds the nearest player within acquisition range
 	@return Player or nil
 ]]
 function ZombieAI:FindNearestPlayer()
 	local players = Players:GetPlayers()
 	local nearestPlayer = nil
-	local nearestDistance = self.config.playerDetectionRange
+	local nearestDistance = self.config.playerAcquireRange
 	
 	for _, player in ipairs(players) do
 		if player.Character then
@@ -558,11 +656,26 @@ function ZombieAI:SetState(newState)
 	if newState == State.MoveToTarget then
 		-- Connect to MoveToFinished for event-driven waypoint progression
 		self._moveToFinishedConnection = self.humanoid.MoveToFinished:Connect(function(reached)
-			if self.state == State.MoveToTarget and reached then
-				-- Advance to next waypoint
-				self.currentWaypoint = self.currentWaypoint + 1
-				-- Immediately issue MoveTo to next waypoint
-				self:IssueMoveToCurrentWaypoint()
+			if self.state == State.MoveToTarget then
+				if reached then
+					-- Successfully reached waypoint, advance to next
+					self.currentWaypoint = self.currentWaypoint + 1
+					-- Immediately issue MoveTo to next waypoint
+					self:IssueMoveToCurrentWaypoint()
+				else
+					-- Failed to reach waypoint (pathfinding issue or stuck)
+					-- Mark as stuck and force recalculation
+					self.currentPath = nil
+					self._lastMoveToPosition = nil
+					
+					-- Get current target position and recalculate immediately
+					local targetPosition = self:GetTargetPosition(self.currentTarget)
+					if targetPosition then
+						self:CalculatePath(targetPosition)
+						self.lastTargetPosition = targetPosition
+						self:IssueMoveToCurrentWaypoint()
+					end
+				end
 			end
 		end)
 	elseif newState == State.Dead then
