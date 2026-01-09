@@ -177,40 +177,70 @@ function BuildService:PlaceWall(player: Player, position: Vector3, rotationY: nu
 		return false, nil, err
 	end
 	
-	-- Snap to grid (walls snap to floor edges)
+	-- Snap to nearest grid position
 	local snappedPos = SnapToGrid(position)
 	
-	-- Check if there's a floor nearby (wall must be adjacent to a floor)
-	local foundNearbyFloor = false
+	-- Find closest floor tile
+	local closestFloor = nil
+	local closestDist = math.huge
 	local checkDistance = TILE_SIZE * 1.5
 	
 	for gridKey, floorPart in pairs(self.floorGrid) do
 		if floorPart and floorPart.Parent then
-			local dist = (floorPart.Position - snappedPos).Magnitude
-			if dist <= checkDistance then
-				foundNearbyFloor = true
-				break
+			local dist = (floorPart.Position - position).Magnitude
+			if dist < closestDist and dist <= checkDistance then
+				closestDist = dist
+				closestFloor = floorPart
 			end
 		end
 	end
 	
-	if not foundNearbyFloor then
+	if not closestFloor then
 		return false, nil, "Wall must be placed adjacent to a floor"
+	end
+	
+	-- Determine which edge of the floor is closest (North, South, East, West)
+	local floorPos = closestFloor.Position
+	local relativePos = position - floorPos
+	local halfTile = TILE_SIZE / 2
+	
+	local wallPos, wallOrientation
+	
+	-- Determine edge based on which component is larger
+	if math.abs(relativePos.X) > math.abs(relativePos.Z) then
+		-- East or West edge
+		if relativePos.X > 0 then
+			-- East edge (+X)
+			wallPos = Vector3.new(floorPos.X + halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
+			wallOrientation = Vector3.new(0, 90, 0)  -- Wall faces Z direction
+		else
+			-- West edge (-X)
+			wallPos = Vector3.new(floorPos.X - halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
+			wallOrientation = Vector3.new(0, 90, 0)
+		end
+	else
+		-- North or South edge
+		if relativePos.Z > 0 then
+			-- North edge (+Z)
+			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z + halfTile)
+			wallOrientation = Vector3.new(0, 0, 0)  -- Wall faces X direction
+		else
+			-- South edge (-Z)
+			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z - halfTile)
+			wallOrientation = Vector3.new(0, 0, 0)
+		end
 	end
 	
 	-- Create wall
 	local wall = Instance.new("Part")
 	wall.Name = "Wall"
 	wall.Size = WALL_SIZE
-	
-	-- Position wall at edge of grid tile
-	local wallPos = Vector3.new(snappedPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, snappedPos.Z)
 	wall.Position = wallPos
 	wall.Anchored = true
 	wall.CanCollide = true
 	wall.Material = Enum.Material.Concrete
 	wall.Color = Color3.fromRGB(150, 150, 150)
-	wall.Orientation = Vector3.new(0, rotationY or 0, 0)
+	wall.Orientation = wallOrientation
 	
 	-- Set attributes
 	wall:SetAttribute("MaxHealth", 200)
@@ -224,7 +254,7 @@ function BuildService:PlaceWall(player: Player, position: Vector3, rotationY: nu
 	wall.Parent = GetStructuresFolder()
 	
 	if self.config.debug then
-		print("[BuildService] Placed wall at", wallPos)
+		print("[BuildService] Placed wall at edge:", wallPos, "orientation:", wallOrientation)
 	end
 	
 	return true, wall, nil
