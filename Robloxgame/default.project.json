@@ -1,27 +1,14 @@
 {
-  "name": "Save the World Game",
+  "name": "Zombie Defense",
   "tree": {
     "$className": "DataModel",
     
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "SizeControlServer": {
-        "$path": "src/ServerScripts/SizeControlServer.server.lua"
-      },
-      "PortalServer": {
-        "$path": "src/ServerScripts/PortalServer.server.lua"
-      }
-    },
-    
-    "StarterPlayer": {
-      "$className": "StarterPlayer",
-      "StarterPlayerScripts": {
-        "$className": "StarterPlayerScripts",
-        "SizeControlUI": {
-          "$path": "src/ClientScripts/SizeControlUI.client.lua"
-        },
-        "PortalUI": {
-          "$path": "src/ClientScripts/PortalUI.client.lua"
+      "Modules": {
+        "$className": "Folder",
+        "ZombieAI": {
+          "$path": "src/Modules/ZombieAI.lua"
         }
       }
     }

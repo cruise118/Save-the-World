@@ -1,45 +1,64 @@
-# Save-the-World
-A Roblox Game Project
+# Zombie Defense
+A Wave-Based Base Building Roblox Game
 
 ## Description
-This is an interactive Roblox game featuring player size controls and a portal teleportation system. Built with Rojo for seamless code synchronization with Roblox Studio.
+Zombie Defense is a wave-based zombie defense game centered around base building, traps, and escalating difficulty. The design intentionally expects frequent base failure — players are meant to fail, learn, redesign, and try again.
 
-## Features
+## Game Design Philosophy
+- **Failure is Learning**: Players are expected to fail and redesign their approach
+- **Strategic Base Building**: Modular base construction with walls and floors
+- **Trap-Based Defense**: Place traps on structures to defend against zombie waves
+- **Active Combat**: Players fight zombies with weapons while earning currency
+- **Progressive Difficulty**: Each wave increases in challenge
 
-### Size Control System
-- Interactive UI with +/- buttons to adjust player size
-- Size range: 0.5x to 5.0x normal size
-- Size persists through character respawns
-- Supports both R15 and R6 character types
-- Server-side validation and anti-exploit measures
+## Core Game Rules
+- Players build a modular base using walls and floors
+- Zombies spawn in waves and attempt to destroy the base
+- **Target Priority**: Zombies attack player-built structures first, then the Base Core
+- **Game Over**: The run ends when the Base Core is destroyed
+- Traps must be placed on existing walls or floors
+- Traps don't take damage; they stop working only if their structure is destroyed
+- Players earn currency from zombie kills
+- Player combat progression is separate from base progression
 
-### Portal System
-- Create custom teleportation portals
-- Set entry and exit points anywhere in the world
-- Visual portal indicators (blue for entry, orange for exit)
-- Portal management UI:
-  - Create new portal pairs
-  - List all active portals
-  - Remove portals (creators only)
-- Teleportation cooldown to prevent rapid re-teleports
-- Automatic cleanup of invalid portals
+## Current Implementation Status
+
+### ✅ Completed: ZombieAI Module (MVP)
+The foundation of the game's enemy system is complete and ready for integration.
+
+**Features:**
+- **State Machine**: Clean implementation with 4 states (Idle, MoveToTarget, Attack, Dead)
+- **Smart Pathfinding**: Uses Roblox PathfindingService to navigate toward targets
+- **Priority Targeting**: Detects and prioritizes nearby player-built structures over Base Core
+- **Configurable Stats**: Easily customize zombie behavior via config tables
+- **Modular Architecture**: Clean, readable code that's easy to extend
+
+**Technical Details:**
+- Uses CollectionService tags ("Structure") to identify player-built structures
+- Damage abstraction via callback function (no hardcoded structure logic)
+- Configurable detection range (18 studs), attack range (6 studs)
+- Configurable damage (10), attack cooldown (1.0s), move speed (16)
+- Automatic cleanup and connection management
+
+### 🔨 Next Steps (Not Yet Implemented)
+The following systems are designed but awaiting implementation:
+- Base Core system and placement
+- Modular base building (walls/floors)
+- Trap system and placement
+- Wave spawning system
+- Player weapons and combat
+- Currency and shop system
+- Structure health system
 
 ## Project Structure
 ```
-Save-the-World/
+Zombie Defense/
 ├── README.md
 └── Robloxgame/
     ├── default.project.json     # Rojo project configuration
     └── src/
-        ├── ServerScripts/       # Server-side logic
-        │   ├── SizeControlServer.server.lua
-        │   └── PortalServer.server.lua
-        ├── ClientScripts/       # Client-side UI scripts
-        │   ├── SizeControlUI.client.lua
-        │   └── PortalUI.client.lua
-        └── UI/                  # UI structure definitions
-            ├── SizeControlGui.lua
-            └── PortalGui.lua
+        └── Modules/
+            └── ZombieAI.lua     # MVP zombie controller
 ```
 
 ## Getting Started
@@ -52,76 +71,91 @@ Save-the-World/
 1. Clone this repository
 2. Install Rojo if you haven't already
 3. Open Roblox Studio
-4. Run `rojo serve` in the project directory
-5. Connect to Rojo from Roblox Studio
+4. Run `rojo serve Robloxgame` in the project directory
+5. Connect to Rojo from Roblox Studio using the Rojo plugin
 
 ## Development
-This project uses Rojo to sync code between your filesystem and Roblox Studio.
 
-### How to Use the Game
+### Using the ZombieAI Module
 
-#### Size Control
-1. Look for the Size Control panel on the left side of the screen
-2. Click "+ Increase" to make your character bigger (up to 5x)
-3. Click "- Decrease" to make your character smaller (down to 0.5x)
-4. Your size persists even after respawning
+```lua
+local CollectionService = game:GetService("CollectionService")
+local ZombieAI = require(game.ServerScriptService.Modules.ZombieAI)
 
-#### Portal System
-1. Find the Portal System panel on the right side of the screen
-2. To create a portal:
-   - Click "Create Portal"
-   - Click anywhere in the world to set the ENTRY point
-   - Click another location to set the EXIT point
-   - Portal pair is created instantly
-3. To remove a portal:
-   - Click "List Portals" to see all active portals
-   - Click on a portal in the list to select it
-   - Click "Remove Portal" to delete it
-4. Walk through any portal to teleport to its paired destination
+-- Create a Base Core (target for zombies)
+local baseCore = Instance.new("Part")
+baseCore.Size = Vector3.new(4, 4, 4)
+baseCore.Position = Vector3.new(0, 2, 0)
+baseCore.Anchored = true
+baseCore.BrickColor = BrickColor.new("Bright red")
+baseCore.Parent = workspace
 
-### Technical Details
+-- Create a zombie model (must have Humanoid and HumanoidRootPart)
+local zombieModel = -- your zombie model here
 
-#### Size Control System
-- Uses RemoteEvents for secure client-server communication
-- Server validates all size changes to prevent exploits
-- Stores player size data for persistence
-- Handles both R15 (using BodyScale values) and R6 (scaling parts) characters
-- Includes size limits (0.5x - 5.0x) and rate limiting
+-- Optional: Create structures for zombies to attack
+local structure = Instance.new("Part")
+structure.Size = Vector3.new(10, 10, 1)
+structure.Position = Vector3.new(15, 5, 0)
+structure.Anchored = true
+CollectionService:AddTag(structure, "Structure")
+structure.Parent = workspace
 
-#### Portal System
-- Portal pairs consist of entry (blue) and exit (orange) portals
-- Touch-based teleportation with cooldown system
-- Prevents rapid re-teleportation with cooldown tracking
-- Server-side portal management for security
-- Automatic cleanup of broken/invalid portals
-- Permission system (only creators can remove their portals)
-- Bi-directional teleportation (works both ways)
+-- Configuration
+local config = {
+	damage = 10,
+	attackCooldown = 1.0,
+	attackRange = 6,
+	structureDetectionRange = 18,
+	moveSpeed = 16,
+	pathfindingUpdateInterval = 1.0,
+	
+	-- Damage callback
+	damageTarget = function(target, amount)
+		print(string.format("Zombie dealt %d damage to %s", amount, target.Name))
+		-- Implement your structure health system here
+	end
+}
 
-### Testing Rojo Setup
-1. Run `rojo serve` in the Robloxgame directory
-2. Open Roblox Studio and create a new place or open an existing one
-3. Install the Rojo plugin in Studio if you haven't already
-4. Click the Rojo plugin and connect to localhost:34872
-5. Click "Play" in Studio
-6. You should see two UI panels appear:
-   - Size Control on the left
-   - Portal System on the right
-7. Test the features to verify everything is working
+-- Initialize and start the zombie AI
+local zombie = ZombieAI.new(zombieModel, baseCore, config)
+zombie:Start()
 
-### Error Handling & Edge Cases
+-- Later, to stop:
+-- zombie:Stop()
+```
 
-The system handles various scenarios:
-- **Size Control**: Size limits, character not found, invalid requests
-- **Portal System**: 
-  - Missing portal destinations (cleanup)
-  - Rapid re-teleportation (cooldown)
-  - Invalid portal positions
-  - Permission checks for portal removal
-  - Automatic cleanup of orphaned portals
-  - Player in portal tracking to prevent loops
+### Technical Architecture
+
+**Language**: Luau (Roblox)
+
+**Code Principles:**
+- Modular design using ModuleScripts
+- Clean, readable state machines
+- Explicit use of Roblox services (PathfindingService, RunService, CollectionService)
+- No over-engineering - only requested features implemented
+- Easy to extend and modify
+
+**ZombieAI State Machine:**
+1. **Idle**: Find a target (structure or base core)
+2. **MoveToTarget**: Pathfind toward target, switching if closer structure detected
+3. **Attack**: Deal damage at intervals while in range
+4. **Dead**: Cleanup state when zombie dies
+
+### What's NOT Included (By Design)
+Following the MVP philosophy, these are intentionally not implemented yet:
+- No UI systems
+- No monetization
+- No cosmetics
+- No meta-progression
+- No player weapons/combat (structure only)
+- No wave spawning
+- No structure building system
+
+These can be added incrementally as requested.
 
 ## Contributing
-Contributions are welcome! Feel free to submit issues or pull requests.
+Contributions are welcome! This project follows a minimal, focused approach - only add explicitly requested features.
 
 ## License
 This project is open source and available for educational purposes.
