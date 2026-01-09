@@ -477,9 +477,25 @@ function ZombieAI:PerformAttack(target)
 	if self.config.damageTarget then
 		self.config.damageTarget(target, self.config.damage)
 	else
-		-- Default behavior: just print
-		warn(string.format("ZombieAI: No damageTarget callback set. Would deal %d damage to %s", 
-			self.config.damage, target.Name))
+		-- Fallback: try to use DamageService directly for structures
+		local CollectionService = game:GetService("CollectionService")
+		if CollectionService:HasTag(target, "Structure") then
+			-- Get DamageService and route damage
+			local ServerScriptService = game:GetService("ServerScriptService")
+			local DamageService = ServerScriptService.Modules:FindFirstChild("DamageService")
+			if DamageService then
+				local damageServiceModule = require(DamageService)
+				damageServiceModule.Damage(target, self.config.damage)
+				print(string.format("Zombie dealt %d damage to %s (via DamageService)", 
+					self.config.damage, target.Name))
+			else
+				warn("ZombieAI: DamageService not found, cannot damage structure")
+			end
+		else
+			-- Default behavior for non-structures: just print
+			warn(string.format("ZombieAI: No damageTarget callback set. Would deal %d damage to %s", 
+				self.config.damage, target.Name))
+		end
 	end
 end
 
