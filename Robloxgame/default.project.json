@@ -18,6 +18,15 @@
         },
         "WaveManager": {
           "$path": "src/Modules/WaveManager.lua"
+        },
+        "StructureHealthService": {
+          "$path": "src/Modules/StructureHealthService.lua"
+        },
+        "StructureSpawner": {
+          "$path": "src/Modules/StructureSpawner.lua"
+        },
+        "TrapService": {
+          "$path": "src/Modules/TrapService.lua"
         }
       },
       "GameInit": {
