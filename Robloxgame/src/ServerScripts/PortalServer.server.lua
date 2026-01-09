@@ -207,11 +207,18 @@ portalEvent.OnServerEvent:Connect(function(player, action, ...)
         print("Entry position:", entryPos, "Type:", type(entryPos))
         print("Exit position:", exitPos, "Type:", type(exitPos))
         
-        -- Validate positions
-        if type(entryPos) ~= "Vector3" or type(exitPos) ~= "Vector3" then
+        -- Validate positions - check if they are Vector3 objects
+        if type(entryPos) ~= "vector" or type(exitPos) ~= "vector" then
             local errorMsg = string.format("Invalid portal positions - Entry: %s (%s), Exit: %s (%s)", 
                 tostring(entryPos), type(entryPos), tostring(exitPos), type(exitPos))
             warn(errorMsg)
+            portalEvent:FireClient(player, "error", "Invalid portal positions")
+            return
+        end
+        
+        -- Additional check: ensure they are Vector3 by checking for X, Y, Z properties
+        if not (entryPos.X and entryPos.Y and entryPos.Z) or not (exitPos.X and exitPos.Y and exitPos.Z) then
+            warn("Portal positions missing Vector3 components")
             portalEvent:FireClient(player, "error", "Invalid portal positions")
             return
         end
