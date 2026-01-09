@@ -401,284 +401,55 @@ function BuildService:PlaceRamp(player: Player, position: Vector3, rotationY: nu
 end
 
 -- Place a wall with a door (players can pass through)
-function BuildService:PlaceWallWithDoor(player: Player, position: Vector3, rotationY: number): (boolean, Model?, string?)
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
-	if not valid then
-		return false, nil, err
-	end
-	
-	-- Snap to nearest grid position
-	local snappedPos = SnapToGrid(position)
-	
-	-- Find closest floor tile (same logic as regular wall)
-	local closestFloor = nil
-	local closestDist = math.huge
-	local checkDistance = TILE_SIZE * 1.5
-	
-	for gridKey, floorPart in pairs(self.floorGrid) do
-		if floorPart and floorPart.Parent then
-			local dist = (floorPart.Position - position).Magnitude
-			if dist < closestDist and dist <= checkDistance then
-				closestDist = dist
-				closestFloor = floorPart
-			end
-		end
-	end
-	
-	if not closestFloor then
-		return false, nil, "Wall must be placed adjacent to a floor"
-	end
-	
-	-- Determine which edge of the floor is closest
-	local floorPos = closestFloor.Position
-	local relativePos = position - floorPos
-	local halfTile = TILE_SIZE / 2
-	
-	local wallPos, wallOrientation
-	
-	if math.abs(relativePos.X) > math.abs(relativePos.Z) then
-		if relativePos.X > 0 then
-			wallPos = Vector3.new(floorPos.X + halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		else
-			wallPos = Vector3.new(floorPos.X - halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		end
-	else
-		if relativePos.Z > 0 then
-			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z + halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		else
-			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z - halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		end
-	end
-	
-	-- Create model to hold wall parts
-	local wallModel = Instance.new("Model")
-	wallModel.Name = "WallWithDoor"
-	
-	-- Door opening dimensions (3 studs wide, 6 studs tall, centered)
-	local doorWidth = 3
-	local doorHeight = 6
-	local sideWidth = (TILE_SIZE - doorWidth) / 2
-	
-	-- Create top part (above door)
-	local topPart = Instance.new("Part")
-	topPart.Name = "WallTop"
-	topPart.Size = Vector3.new(TILE_SIZE, WALL_SIZE.Y - doorHeight, WALL_SIZE.Z)
-	topPart.Position = wallPos + Vector3.new(0, doorHeight / 2, 0)
-	topPart.Anchored = true
-	topPart.CanCollide = true
-	topPart.Material = Enum.Material.Concrete
-	topPart.Color = Color3.fromRGB(150, 150, 150)
-	topPart.Orientation = wallOrientation
-	topPart.Parent = wallModel
-	
-	-- Create left side part
-	local leftPart = Instance.new("Part")
-	leftPart.Name = "WallLeft"
-	leftPart.Size = Vector3.new(sideWidth, doorHeight, WALL_SIZE.Z)
-	leftPart.Anchored = true
-	leftPart.CanCollide = true
-	leftPart.Material = Enum.Material.Concrete
-	leftPart.Color = Color3.fromRGB(150, 150, 150)
-	leftPart.Orientation = wallOrientation
-	leftPart.Parent = wallModel
-	
-	-- Create right side part
-	local rightPart = Instance.new("Part")
-	rightPart.Name = "WallRight"
-	rightPart.Size = Vector3.new(sideWidth, doorHeight, WALL_SIZE.Z)
-	rightPart.Anchored = true
-	rightPart.CanCollide = true
-	rightPart.Material = Enum.Material.Concrete
-	rightPart.Color = Color3.fromRGB(150, 150, 150)
-	rightPart.Orientation = wallOrientation
-	rightPart.Parent = wallModel
-	
-	-- Position side parts based on orientation
-	if wallOrientation.Y == 90 then
-		-- Wall faces Z direction
-		leftPart.Position = wallPos + Vector3.new(0, -(WALL_SIZE.Y - doorHeight) / 2, sideWidth + doorWidth / 2)
-		rightPart.Position = wallPos + Vector3.new(0, -(WALL_SIZE.Y - doorHeight) / 2, -(sideWidth + doorWidth / 2))
-	else
-		-- Wall faces X direction
-		leftPart.Position = wallPos + Vector3.new(-(sideWidth + doorWidth / 2), -(WALL_SIZE.Y - doorHeight) / 2, 0)
-		rightPart.Position = wallPos + Vector3.new(sideWidth + doorWidth / 2, -(WALL_SIZE.Y - doorHeight) / 2, 0)
-	end
-	
-	-- Set PrimaryPart
-	wallModel.PrimaryPart = topPart
-	
-	-- Set attributes on model
-	wallModel:SetAttribute("MaxHealth", 200)
-	wallModel:SetAttribute("Health", 200)
-	wallModel:SetAttribute("Destroyed", false)
-	
-	-- Tag as Structure
-	CollectionService:AddTag(wallModel, "Structure")
-	
-	-- Parent to workspace
-	wallModel.Parent = GetStructuresFolder()
-	
-	if self.config.debug then
-		print("[BuildService] Placed wall with door at:", wallPos)
-	end
-	
-	return true, wallModel, nil
+
+-- Place a ceiling tile
+function BuildService:PlaceCeiling(player: Player, position: Vector3, rotationY: number): (boolean, Part?, string?)
+-- Validate distance
+local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
+if not valid then
+return false, nil, err
 end
 
--- Place a wall with a window (hole in the middle)
-function BuildService:PlaceWallWithWindow(player: Player, position: Vector3, rotationY: number): (boolean, Model?, string?)
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
-	if not valid then
-		return false, nil, err
-	end
-	
-	-- Snap to nearest grid position
-	local snappedPos = SnapToGrid(position)
-	
-	-- Find closest floor tile (same logic as regular wall)
-	local closestFloor = nil
-	local closestDist = math.huge
-	local checkDistance = TILE_SIZE * 1.5
-	
-	for gridKey, floorPart in pairs(self.floorGrid) do
-		if floorPart and floorPart.Parent then
-			local dist = (floorPart.Position - position).Magnitude
-			if dist < closestDist and dist <= checkDistance then
-				closestDist = dist
-				closestFloor = floorPart
-			end
-		end
-	end
-	
-	if not closestFloor then
-		return false, nil, "Wall must be placed adjacent to a floor"
-	end
-	
-	-- Determine which edge of the floor is closest
-	local floorPos = closestFloor.Position
-	local relativePos = position - floorPos
-	local halfTile = TILE_SIZE / 2
-	
-	local wallPos, wallOrientation
-	
-	if math.abs(relativePos.X) > math.abs(relativePos.Z) then
-		if relativePos.X > 0 then
-			wallPos = Vector3.new(floorPos.X + halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		else
-			wallPos = Vector3.new(floorPos.X - halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		end
-	else
-		if relativePos.Z > 0 then
-			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z + halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		else
-			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z - halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		end
-	end
-	
-	-- Create model to hold wall parts
-	local wallModel = Instance.new("Model")
-	wallModel.Name = "WallWithWindow"
-	
-	-- Window opening dimensions (4 studs wide, 3 studs tall, centered vertically)
-	local windowWidth = 4
-	local windowHeight = 3
-	local sideWidth = (TILE_SIZE - windowWidth) / 2
-	local bottomHeight = (WALL_SIZE.Y - windowHeight) / 2
-	local topHeight = WALL_SIZE.Y - windowHeight - bottomHeight
-	
-	-- Create bottom part (below window)
-	local bottomPart = Instance.new("Part")
-	bottomPart.Name = "WallBottom"
-	bottomPart.Size = Vector3.new(TILE_SIZE, bottomHeight, WALL_SIZE.Z)
-	bottomPart.Position = wallPos - Vector3.new(0, (WALL_SIZE.Y - bottomHeight) / 2, 0)
-	bottomPart.Anchored = true
-	bottomPart.CanCollide = true
-	bottomPart.Material = Enum.Material.Concrete
-	bottomPart.Color = Color3.fromRGB(150, 150, 150)
-	bottomPart.Orientation = wallOrientation
-	bottomPart.Parent = wallModel
-	
-	-- Create top part (above window)
-	local topPart = Instance.new("Part")
-	topPart.Name = "WallTop"
-	topPart.Size = Vector3.new(TILE_SIZE, topHeight, WALL_SIZE.Z)
-	topPart.Position = wallPos + Vector3.new(0, (WALL_SIZE.Y - topHeight) / 2, 0)
-	topPart.Anchored = true
-	topPart.CanCollide = true
-	topPart.Material = Enum.Material.Concrete
-	topPart.Color = Color3.fromRGB(150, 150, 150)
-	topPart.Orientation = wallOrientation
-	topPart.Parent = wallModel
-	
-	-- Create left side part (beside window)
-	local leftPart = Instance.new("Part")
-	leftPart.Name = "WallLeft"
-	leftPart.Size = Vector3.new(sideWidth, windowHeight, WALL_SIZE.Z)
-	leftPart.Anchored = true
-	leftPart.CanCollide = true
-	leftPart.Material = Enum.Material.Concrete
-	leftPart.Color = Color3.fromRGB(150, 150, 150)
-	leftPart.Orientation = wallOrientation
-	leftPart.Parent = wallModel
-	
-	-- Create right side part (beside window)
-	local rightPart = Instance.new("Part")
-	rightPart.Name = "WallRight"
-	rightPart.Size = Vector3.new(sideWidth, windowHeight, WALL_SIZE.Z)
-	rightPart.Anchored = true
-	rightPart.CanCollide = true
-	rightPart.Material = Enum.Material.Concrete
-	rightPart.Color = Color3.fromRGB(150, 150, 150)
-	rightPart.Orientation = wallOrientation
-	rightPart.Parent = wallModel
-	
-	-- Position side parts based on orientation
-	if wallOrientation.Y == 90 then
-		-- Wall faces Z direction
-		leftPart.Position = wallPos + Vector3.new(0, 0, sideWidth + windowWidth / 2)
-		rightPart.Position = wallPos + Vector3.new(0, 0, -(sideWidth + windowWidth / 2))
-	else
-		-- Wall faces X direction
-		leftPart.Position = wallPos + Vector3.new(-(sideWidth + windowWidth / 2), 0, 0)
-		rightPart.Position = wallPos + Vector3.new(sideWidth + windowWidth / 2, 0, 0)
-	end
-	
-	-- Set PrimaryPart
-	wallModel.PrimaryPart = bottomPart
-	
-	-- Set attributes on model
-	wallModel:SetAttribute("MaxHealth", 200)
-	wallModel:SetAttribute("Health", 200)
-	wallModel:SetAttribute("Destroyed", false)
-	
-	-- Tag as Structure
-	CollectionService:AddTag(wallModel, "Structure")
-	
-	-- Parent to workspace
-	wallModel.Parent = GetStructuresFolder()
-	
-	if self.config.debug then
-		print("[BuildService] Placed wall with window at:", wallPos)
-	end
-	
-	return true, wallModel, nil
+-- Snap to grid
+local snappedPos = SnapToGrid(position)
+-- Adjust Y position for ceiling (8 studs above floor)
+local ceilingY = snappedPos.Y + 8 - 0.5  -- 8 studs up, then down 0.5 for ceiling thickness
+local ceilingPos = Vector3.new(snappedPos.X, ceilingY, snappedPos.Z)
+
+-- Create ceiling
+local ceiling = Instance.new("Part")
+ceiling.Name = "Ceiling"
+ceiling.Size = FLOOR_SIZE  -- Same size as floor (12x1x12)
+ceiling.Position = ceilingPos
+ceiling.Anchored = true
+ceiling.CanCollide = true
+ceiling.Material = Enum.Material.Concrete
+ceiling.Color = Color3.fromRGB(140, 140, 140)
+ceiling.Orientation = Vector3.new(0, rotationY or 0, 0)
+
+-- Set attributes
+ceiling:SetAttribute("MaxHealth", 150)
+ceiling:SetAttribute("Health", 150)
+ceiling:SetAttribute("Destroyed", false)
+
+-- Tag as Structure
+CollectionService:AddTag(ceiling, "Structure")
+
+-- Parent to workspace
+ceiling.Parent = GetStructuresFolder()
+
+if self.config.debug then
+print("[BuildService] Placed ceiling at", ceilingPos)
+end
+
+return true, ceiling, nil
 end
 
 -- Cleanup
 function BuildService:Destroy()
-	self.floorGrid = {}
-	self.partToGrid = {}
-	self.trapService = nil
+self.floorGrid = {}
+self.partToGrid = {}
+self.trapService = nil
 end
 
 return BuildService

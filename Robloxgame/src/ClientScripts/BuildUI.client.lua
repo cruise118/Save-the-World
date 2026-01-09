@@ -57,8 +57,8 @@ screenGui.Parent = playerGui
 -- Hotbar frame (bottom center)
 local hotbarFrame = Instance.new("Frame")
 hotbarFrame.Name = "HotbarFrame"
-hotbarFrame.Size = UDim2.new(0, 640, 0, 80)  -- Increased width for 6 slots
-hotbarFrame.Position = UDim2.new(0.5, -320, 1, -100)  -- Adjusted centering
+hotbarFrame.Size = UDim2.new(0, 560, 0, 80)  -- Width for 5 slots
+hotbarFrame.Position = UDim2.new(0.5, -280, 1, -100)  -- Adjusted centering
 hotbarFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 hotbarFrame.BackgroundTransparency = 0.3
 hotbarFrame.BorderSizePixel = 0
@@ -75,8 +75,7 @@ local SLOTS = {
 	{name = "Wall", key = "2", color = Color3.fromRGB(200, 200, 120), structureType = "wall"},
 	{name = "Trap", key = "3", color = Color3.fromRGB(200, 120, 120), structureType = "trap"},
 	{name = "Ramp", key = "4", color = Color3.fromRGB(150, 130, 100), structureType = "ramp"},
-	{name = "Door", key = "5", color = Color3.fromRGB(180, 180, 150), structureType = "walldoor"},
-	{name = "Window", key = "6", color = Color3.fromRGB(170, 170, 180), structureType = "wallwindow"},
+	{name = "Ceiling", key = "5", color = Color3.fromRGB(140, 140, 140), structureType = "ceiling"},
 }
 
 local slotButtons = {}
@@ -152,7 +151,7 @@ end
 local deleteButton = Instance.new("TextButton")
 deleteButton.Name = "DeleteButton"
 deleteButton.Size = UDim2.new(0, 70, 0, 70)
-deleteButton.Position = UDim2.new(0, 560, 0.5, -35)  -- Adjusted for 6 slots (10 + 6*80 = 490, 490 + 70 = 560)
+deleteButton.Position = UDim2.new(0, 480, 0.5, -35)  -- Adjusted for 5 slots (10 + 5*80 = 410, 410 + 70 = 480)
 deleteButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 deleteButton.BackgroundTransparency = 0.2
 deleteButton.BorderSizePixel = 2

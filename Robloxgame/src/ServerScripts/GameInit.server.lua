@@ -241,10 +241,8 @@ placeStructureRemote.OnServerEvent:Connect(function(player, structureType, posit
 		end
 	elseif structureType == "ramp" then
 		success, part, err = buildService:PlaceRamp(player, position, rotation)
-	elseif structureType == "walldoor" then
-		success, part, err = buildService:PlaceWallWithDoor(player, position, rotation)
-	elseif structureType == "wallwindow" then
-		success, part, err = buildService:PlaceWallWithWindow(player, position, rotation)
+	elseif structureType == "ceiling" then
+		success, part, err = buildService:PlaceCeiling(player, position, rotation)
 	else
 		warn("[BuildService] Unknown structure type:", structureType)
 		return

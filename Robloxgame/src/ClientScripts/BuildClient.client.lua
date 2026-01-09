@@ -27,7 +27,7 @@ local deselectSlotRemote = buildEvents:WaitForChild("DeselectSlot")
 -- Build mode state
 local buildMode = {
 	active = false,
-	selectedSlot = nil,  -- 1-6 = floor, wall, trap, ramp, door, window
+	selectedSlot = nil,  -- 1-5 = floor, wall, trap, ramp, ceiling
 	rotation = 0,  -- Current rotation angle
 	ghost = nil,  -- Current ghost preview part
 	maxDistance = 50,  -- Max build distance
@@ -43,8 +43,7 @@ local SLOT_CONFIG = {
 	[2] = { type = "wall", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(150, 150, 150), name = "Wall" },
 	[3] = { type = "trap", size = Vector3.new(11.8, 0.5, 11.8), color = Color3.fromRGB(180, 50, 50), name = "Spike Trap" },
 	[4] = { type = "ramp", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(130, 130, 100), name = "Ramp" },
-	[5] = { type = "walldoor", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(180, 180, 150), name = "Wall with Door" },
-	[6] = { type = "wallwindow", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(170, 170, 180), name = "Wall with Window" },
+	[5] = { type = "ceiling", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(140, 140, 140), name = "Ceiling" },
 }
 
 -- Snap position to grid
@@ -85,19 +84,8 @@ local function UpdateGhost()
 		ghost.Material = Enum.Material.SmoothPlastic
 		ghost.Color = config.color
 		ghost.Parent = workspace
-	elseif config.type == "walldoor" or config.type == "wallwindow" then
-		-- For doors and windows, create a simplified preview (just show as a regular wall for now)
-		ghost = Instance.new("Part")
-		ghost.Name = "BuildGhost"
-		ghost.Size = config.size
-		ghost.Anchored = true
-		ghost.CanCollide = false
-		ghost.Transparency = 0.5
-		ghost.Material = Enum.Material.SmoothPlastic
-		ghost.Color = config.color
-		ghost.Parent = workspace
 	else
-		-- Regular structures (floor, wall, trap)
+		-- Regular structures (floor, wall, trap, ceiling)
 		ghost = Instance.new("Part")
 		ghost.Name = "BuildGhost"
 		ghost.Size = config.size
