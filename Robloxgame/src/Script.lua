@@ -25,10 +25,14 @@ local function makeCharacterBig(character)
         bodyDepthScale.Value = scaleValue
         print("Made " .. character.Name .. " BIG! (R15)")
     else
-        -- R6 character - scale the humanoid's scale property
-        humanoid:SetAttribute("BodyHeightScale", scaleValue)
-        humanoid:SetAttribute("BodyWidthScale", scaleValue)
-        humanoid:SetAttribute("BodyDepthScale", scaleValue)
+        -- R6 character - manually scale all body parts
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") then
+                part.Size = part.Size * scaleValue
+            end
+        end
+        -- Also increase walk speed to match the larger size
+        humanoid.WalkSpeed = humanoid.WalkSpeed * scaleValue
         print("Made " .. character.Name .. " BIG! (R6)")
     end
 end
