@@ -154,7 +154,7 @@ end
 function StructureHealthService:Heal(part, amount)
 	assert(RunService:IsServer(), "Heal must be called on the server")
 	assert(typeof(part) == "Instance" and part:IsA("BasePart"), "part must be a BasePart")
-	assert(type(amount) == "number" and amount > 0, "amount must be a positive number")
+	assert(typeof(amount) == "number" and amount > 0, "amount must be a positive number")
 	
 	-- Not a registered structure
 	if not self.registered[part] then

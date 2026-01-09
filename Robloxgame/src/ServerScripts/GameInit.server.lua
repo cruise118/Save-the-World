@@ -143,13 +143,8 @@ local function StartRun()
 		print("   Survived", currentWave, "waves")
 		print("═══════════════════════════════")
 		
-		-- Stop and cleanup (wave manager and structure health)
-		if waveManager then
-			waveManager:Stop()
-		end
-		if structureHealth then
-			structureHealth:Destroy()
-		end
+		-- Stop and cleanup all systems
+		StopRun()
 	end)
 	
 	-- Start the game
