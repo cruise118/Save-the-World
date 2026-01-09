@@ -41,6 +41,27 @@ function StructureHealthService.new(config)
 	-- Track registered structures
 	self.registered = {} -- [part] = { connection: RBXScriptConnection }
 	
+	-- Auto-register all existing structures with "Structure" tag
+	for _, part in ipairs(CollectionService:GetTagged("Structure")) do
+		if part:IsA("BasePart") then
+			self:Register(part)
+		end
+	end
+	
+	-- Auto-register new structures when tagged
+	self.tagConnection = CollectionService:GetInstanceAddedSignal("Structure"):Connect(function(part)
+		if part:IsA("BasePart") then
+			self:Register(part)
+		end
+	end)
+	
+	-- Auto-unregister when tag is removed
+	self.tagRemovedConnection = CollectionService:GetInstanceRemovedSignal("Structure"):Connect(function(part)
+		if part:IsA("BasePart") then
+			self:Unregister(part)
+		end
+	end)
+	
 	return self
 end
 
@@ -204,6 +225,18 @@ end
 
 -- Cleanup all connections and tracked structures
 function StructureHealthService:Destroy()
+	-- Disconnect tag watching connections
+	if self.tagConnection then
+		self.tagConnection:Disconnect()
+		self.tagConnection = nil
+	end
+	
+	if self.tagRemovedConnection then
+		self.tagRemovedConnection:Disconnect()
+		self.tagRemovedConnection = nil
+	end
+	
+	-- Cleanup all registered structures
 	for part, data in pairs(self.registered) do
 		if data.connection then
 			data.connection:Disconnect()
