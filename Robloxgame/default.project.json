@@ -4,9 +4,9 @@
     "$className": "DataModel",
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "CharacterScaleTest": {
+      "MakeBigScript": {
         "$className": "Script",
-        "$path": "src/Script.lua"
+        "$path": "src/MakeBigScript.lua"
       }
     }
   }
