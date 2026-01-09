@@ -5,8 +5,7 @@
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "MakeBigScript": {
-        "$className": "Script",
-        "$path": "src/MakeBigScript.lua"
+        "$path": "src/MakeBigScript.server.lua"
       }
     }
   }
