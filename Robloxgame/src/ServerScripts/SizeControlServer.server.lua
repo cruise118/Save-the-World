@@ -39,9 +39,12 @@ local function applySize(character, sizeValue)
         bodyDepthScale.Value = sizeValue
     else
         -- R6 character - scale parts
+        local currentSize = humanoid:GetAttribute("CurrentSize") or 1
+        local scaleFactor = sizeValue / currentSize
+        
         for _, part in pairs(character:GetChildren()) do
             if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.Size = part.Size * (sizeValue / (humanoid:GetAttribute("CurrentSize") or 1))
+                part.Size = part.Size * scaleFactor
             end
         end
         humanoid.WalkSpeed = 16 * sizeValue

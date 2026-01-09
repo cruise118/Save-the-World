@@ -11,6 +11,9 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local mouse = player:GetMouse()
 
+-- Configuration
+local STATUS_MESSAGE_DURATION = 3 -- seconds
+
 -- Wait for RemoteEvent
 local portalEvent = ReplicatedStorage:WaitForChild("PortalEvent", 10)
 if not portalEvent then
@@ -44,7 +47,7 @@ local selectedPortalId = nil
 local function updateStatus(text, color)
     statusLabel.Text = text
     statusLabel.TextColor3 = color or Color3.fromRGB(255, 255, 255)
-    task.delay(3, function()
+    task.delay(STATUS_MESSAGE_DURATION, function()
         if statusLabel.Text == text then
             statusLabel.Text = "Ready"
             statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)

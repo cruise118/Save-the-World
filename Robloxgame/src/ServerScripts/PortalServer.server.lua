@@ -6,6 +6,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
 
 -- Configuration
 local TELEPORT_COOLDOWN = 3 -- seconds
@@ -30,7 +31,7 @@ local playersInPortal = {} -- {userId = portalId}
 
 -- Generate unique portal ID
 local function generatePortalId()
-    return "Portal_" .. game:GetService("HttpService"):GenerateGUID(false)
+    return "Portal_" .. HttpService:GenerateGUID(false)
 end
 
 -- Create a portal part
