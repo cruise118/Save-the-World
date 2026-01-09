@@ -49,6 +49,9 @@
         },
         "BuildUI": {
           "$path": "src/ClientScripts/BuildUI.client.lua"
+        },
+        "HealthBarClient": {
+          "$path": "src/ClientScripts/HealthBarClient.client.lua"
         }
       }
     }
