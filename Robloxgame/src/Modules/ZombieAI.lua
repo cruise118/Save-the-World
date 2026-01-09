@@ -235,6 +235,7 @@ function ZombieAI:UpdateMove()
 			self.currentTarget = nearestPlayer
 			self.currentPath = nil -- Force path recalculation
 			self.lastPathUpdateTime = 0 -- Force immediate path update
+			self.currentWaypointPosition = nil -- Clear waypoint tracking
 		end
 	else
 		-- No player nearby, check if we were targeting a player and need to switch
@@ -243,6 +244,7 @@ function ZombieAI:UpdateMove()
 			self.currentTarget = nil
 			self.currentPath = nil -- Force path recalculation
 			self.lastPathUpdateTime = 0 -- Force immediate path update
+			self.currentWaypointPosition = nil -- Clear waypoint tracking
 		end
 		
 		-- Validate current target still exists
@@ -260,6 +262,7 @@ function ZombieAI:UpdateMove()
 			end
 			self.currentPath = nil -- Force path recalculation
 			self.lastPathUpdateTime = 0 -- Force immediate path update
+			self.currentWaypointPosition = nil -- Clear waypoint tracking
 		else
 			-- We have a valid non-player target, check if we should switch to a closer structure
 			local nearestStructure, nearestDistance = self:FindNearestStructure()
@@ -272,6 +275,7 @@ function ZombieAI:UpdateMove()
 						self.currentTarget = nearestStructure
 						self.currentPath = nil -- Force path recalculation
 						self.lastPathUpdateTime = 0 -- Force immediate path update
+						self.currentWaypointPosition = nil -- Clear waypoint tracking
 					end
 				end
 			end
@@ -303,16 +307,25 @@ function ZombieAI:UpdateMove()
 	-- Follow path
 	if self.currentPath and self.currentWaypoint <= #self.currentPath then
 		local waypoint = self.currentPath[self.currentWaypoint]
-		self.humanoid:MoveTo(waypoint)
 		
-		-- Check if reached waypoint
+		-- Only issue MoveTo command if waypoint changed or this is first time
+		if not self.currentWaypointPosition or (self.currentWaypointPosition - waypoint).Magnitude > 0.1 then
+			self.humanoid:MoveTo(waypoint)
+			self.currentWaypointPosition = waypoint
+		end
+		
+		-- Check if reached waypoint (larger distance threshold for smoother movement)
 		local distanceToWaypoint = (self.rootPart.Position - waypoint).Magnitude
-		if distanceToWaypoint < 4 then
+		if distanceToWaypoint < 5 then
 			self.currentWaypoint = self.currentWaypoint + 1
+			self.currentWaypointPosition = nil -- Clear so next waypoint triggers MoveTo
 		end
 	else
-		-- No valid path, move directly toward target
-		self.humanoid:MoveTo(targetPosition)
+		-- No valid path, move directly toward target (only if position changed significantly)
+		if not self.currentWaypointPosition or (self.currentWaypointPosition - targetPosition).Magnitude > 2 then
+			self.humanoid:MoveTo(targetPosition)
+			self.currentWaypointPosition = targetPosition
+		end
 	end
 end
 
@@ -481,8 +494,9 @@ function ZombieAI:CalculatePath(targetPosition)
 			end
 		end
 		
-		-- Reset waypoint index on new path
+		-- Reset waypoint index and tracking on new path
 		self.currentWaypoint = 1
+		self.currentWaypointPosition = nil -- Clear so first waypoint triggers MoveTo
 		
 		-- If path is empty or very short, move directly
 		if #self.currentPath == 0 then
