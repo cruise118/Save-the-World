@@ -34,17 +34,17 @@ local buildMode = {
 }
 
 -- Constants
-local TILE_SIZE = 16
+local TILE_SIZE = 12
 local ROTATION_INCREMENT = 90
 
 -- Slot configuration
 local SLOT_CONFIG = {
-	[1] = { type = "floor", size = Vector3.new(16, 1, 16), color = Color3.fromRGB(120, 120, 120), name = "Floor" },
-	[2] = { type = "wall", size = Vector3.new(16, 8, 1), color = Color3.fromRGB(150, 150, 150), name = "Wall" },
-	[3] = { type = "trap", size = Vector3.new(15.8, 0.5, 15.8), color = Color3.fromRGB(180, 50, 50), name = "Spike Trap" },
-	[4] = { type = "ramp", size = Vector3.new(16, 1, 16), color = Color3.fromRGB(130, 130, 100), name = "Ramp" },
-	[5] = { type = "walldoor", size = Vector3.new(16, 8, 1), color = Color3.fromRGB(180, 180, 150), name = "Wall with Door" },
-	[6] = { type = "wallwindow", size = Vector3.new(16, 8, 1), color = Color3.fromRGB(170, 170, 180), name = "Wall with Window" },
+	[1] = { type = "floor", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(120, 120, 120), name = "Floor" },
+	[2] = { type = "wall", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(150, 150, 150), name = "Wall" },
+	[3] = { type = "trap", size = Vector3.new(11.8, 0.5, 11.8), color = Color3.fromRGB(180, 50, 50), name = "Spike Trap" },
+	[4] = { type = "ramp", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(130, 130, 100), name = "Ramp" },
+	[5] = { type = "walldoor", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(180, 180, 150), name = "Wall with Door" },
+	[6] = { type = "wallwindow", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(170, 170, 180), name = "Wall with Window" },
 }
 
 -- Snap position to grid

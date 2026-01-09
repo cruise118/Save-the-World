@@ -18,7 +18,7 @@ local BuildService = {}
 BuildService.__index = BuildService
 
 -- Constants
-local TILE_SIZE = 16
+local TILE_SIZE = 12
 local FLOOR_SIZE = Vector3.new(TILE_SIZE, 1, TILE_SIZE)
 local WALL_SIZE = Vector3.new(TILE_SIZE, 8, 1)
 local RAMP_SIZE = Vector3.new(TILE_SIZE, 1, TILE_SIZE)  -- Same footprint as floor
