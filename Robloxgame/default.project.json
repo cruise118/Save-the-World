@@ -13,28 +13,6 @@
       }
     },
     
-    "StarterGui": {
-      "$className": "StarterGui",
-      "SizeControlGui": {
-        "$className": "ScreenGui",
-        "$properties": {
-          "ResetOnSpawn": false
-        },
-        "MainFrame": {
-          "$path": "src/UI/SizeControlGui.lua"
-        }
-      },
-      "PortalGui": {
-        "$className": "ScreenGui",
-        "$properties": {
-          "ResetOnSpawn": false
-        },
-        "MainFrame": {
-          "$path": "src/UI/PortalGui.lua"
-        }
-      }
-    },
-    
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "StarterPlayerScripts": {

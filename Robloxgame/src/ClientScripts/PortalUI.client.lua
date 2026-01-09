@@ -1,6 +1,6 @@
 --[[
     Portal System UI - Client Script
-    Handles UI for portal creation and management
+    Handles UI for portal creation and management - creates UI programmatically
 ]]
 
 local Players = game:GetService("Players")
@@ -21,20 +21,139 @@ if not portalEvent then
     return
 end
 
--- Wait for UI
-local portalGui = playerGui:WaitForChild("PortalGui", 10)
-if not portalGui then
-    warn("PortalGui not found")
-    return
+-- Create the UI programmatically
+local function createUI()
+    -- Create ScreenGui
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PortalGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+    
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.AnchorPoint = Vector2.new(1, 0.5)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    mainFrame.BackgroundTransparency = 0.2
+    mainFrame.BorderSizePixel = 2
+    mainFrame.Position = UDim2.new(1, -10, 0.5, 0)
+    mainFrame.Size = UDim2.new(0, 200, 0, 250)
+    mainFrame.Parent = screenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = mainFrame
+    
+    -- Title
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Position = UDim2.new(0, 0, 0, 10)
+    titleLabel.Size = UDim2.new(1, 0, 0, 30)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Text = "Portal System"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 18
+    titleLabel.Parent = mainFrame
+    
+    -- Status Label
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Position = UDim2.new(0, 0, 0, 40)
+    statusLabel.Size = UDim2.new(1, 0, 0, 20)
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Text = "Ready"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    statusLabel.TextSize = 14
+    statusLabel.Parent = mainFrame
+    
+    -- Create Button
+    local createButton = Instance.new("TextButton")
+    createButton.Name = "CreateButton"
+    createButton.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    createButton.Position = UDim2.new(0.1, 0, 0, 70)
+    createButton.Size = UDim2.new(0.8, 0, 0, 30)
+    createButton.Font = Enum.Font.GothamBold
+    createButton.Text = "Create Portal"
+    createButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    createButton.TextSize = 14
+    createButton.Parent = mainFrame
+    
+    local createCorner = Instance.new("UICorner")
+    createCorner.CornerRadius = UDim.new(0, 6)
+    createCorner.Parent = createButton
+    
+    -- List Button
+    local listButton = Instance.new("TextButton")
+    listButton.Name = "ListButton"
+    listButton.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+    listButton.Position = UDim2.new(0.1, 0, 0, 110)
+    listButton.Size = UDim2.new(0.8, 0, 0, 30)
+    listButton.Font = Enum.Font.GothamBold
+    listButton.Text = "List Portals"
+    listButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    listButton.TextSize = 14
+    listButton.Parent = mainFrame
+    
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 6)
+    listCorner.Parent = listButton
+    
+    -- Remove Button
+    local removeButton = Instance.new("TextButton")
+    removeButton.Name = "RemoveButton"
+    removeButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    removeButton.Position = UDim2.new(0.1, 0, 0, 150)
+    removeButton.Size = UDim2.new(0.8, 0, 0, 30)
+    removeButton.Font = Enum.Font.GothamBold
+    removeButton.Text = "Remove Portal"
+    removeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    removeButton.TextSize = 14
+    removeButton.Parent = mainFrame
+    
+    local removeCorner = Instance.new("UICorner")
+    removeCorner.CornerRadius = UDim.new(0, 6)
+    removeCorner.Parent = removeButton
+    
+    -- Portal List Frame
+    local portalListFrame = Instance.new("Frame")
+    portalListFrame.Name = "PortalListFrame"
+    portalListFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    portalListFrame.Position = UDim2.new(0, -210, 0, 0)
+    portalListFrame.Size = UDim2.new(0, 200, 1, 0)
+    portalListFrame.Visible = false
+    portalListFrame.Parent = mainFrame
+    
+    local listFrameCorner = Instance.new("UICorner")
+    listFrameCorner.CornerRadius = UDim.new(0, 8)
+    listFrameCorner.Parent = portalListFrame
+    
+    local listTitle = Instance.new("TextLabel")
+    listTitle.Name = "ListTitle"
+    listTitle.BackgroundTransparency = 1
+    listTitle.Position = UDim2.new(0, 0, 0, 10)
+    listTitle.Size = UDim2.new(1, 0, 0, 25)
+    listTitle.Font = Enum.Font.GothamBold
+    listTitle.Text = "Active Portals"
+    listTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    listTitle.TextSize = 16
+    listTitle.Parent = portalListFrame
+    
+    local portalListContainer = Instance.new("ScrollingFrame")
+    portalListContainer.Name = "Container"
+    portalListContainer.BackgroundTransparency = 1
+    portalListContainer.Position = UDim2.new(0, 5, 0, 40)
+    portalListContainer.Size = UDim2.new(1, -10, 1, -50)
+    portalListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    portalListContainer.ScrollBarThickness = 6
+    portalListContainer.Parent = portalListFrame
+    
+    return screenGui, createButton, listButton, removeButton, statusLabel, portalListFrame, portalListContainer
 end
 
-local mainFrame = portalGui:WaitForChild("MainFrame")
-local createButton = mainFrame:WaitForChild("CreateButton")
-local removeButton = mainFrame:WaitForChild("RemoveButton")
-local listButton = mainFrame:WaitForChild("ListButton")
-local statusLabel = mainFrame:WaitForChild("StatusLabel")
-local portalListFrame = mainFrame:WaitForChild("PortalListFrame")
-local portalListContainer = portalListFrame:WaitForChild("Container")
+-- Create the UI
+local portalGui, createButton, listButton, removeButton, statusLabel, portalListFrame, portalListContainer = createUI()
 
 -- State
 local isSettingEntry = false
@@ -124,6 +243,7 @@ createButton.MouseButton1Click:Connect(function()
         isSettingExit = false
         entryPosition = nil
         updateStatus("Cancelled", Color3.fromRGB(255, 200, 100))
+        createButton.Text = "Create Portal"
         return
     end
     
