@@ -1,11 +1,46 @@
 {
-  "name": "My Roblox Game",
+  "name": "Save the World Game",
   "tree": {
     "$className": "DataModel",
+    
     "ServerScriptService": {
       "$className": "ServerScriptService",
-      "MakeBigScript": {
-        "$path": "src/MakeBigScript.server.lua"
+      "SizeControlServer": {
+        "$path": "src/ServerScripts/SizeControlServer.server.lua"
+      },
+      "PortalServer": {
+        "$path": "src/ServerScripts/PortalServer.server.lua"
+      }
+    },
+    
+    "StarterGui": {
+      "$className": "StarterGui",
+      "SizeControlGui": {
+        "$className": "ScreenGui",
+        "ResetOnSpawn": false,
+        "MainFrame": {
+          "$path": "src/UI/SizeControlGui.lua"
+        }
+      },
+      "PortalGui": {
+        "$className": "ScreenGui",
+        "ResetOnSpawn": false,
+        "MainFrame": {
+          "$path": "src/UI/PortalGui.lua"
+        }
+      }
+    },
+    
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "SizeControlUI": {
+          "$path": "src/ClientScripts/SizeControlUI.client.lua"
+        },
+        "PortalUI": {
+          "$path": "src/ClientScripts/PortalUI.client.lua"
+        }
       }
     }
   }
