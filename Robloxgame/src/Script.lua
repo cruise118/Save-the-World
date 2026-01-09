@@ -1,71 +1,59 @@
 --[[
-    Save the World - Main Game Script
-    This script handles the core game logic and initialization
+    Rojo Setup Test Script
+    This script makes your character big to test that Rojo is working correctly
 ]]
 
--- Print welcome message
-print("Save the World - Game Starting...")
+print("Rojo test script loaded!")
 
--- Game Configuration
-local GameConfig = {
-    GameName = "Save the World",
-    Version = "1.0.0",
-    MaxPlayers = 10,
-    RoundDuration = 300 -- 5 minutes in seconds
-}
-
--- Display game information
-print("Game Name: " .. GameConfig.GameName)
-print("Version: " .. GameConfig.Version)
-print("Max Players: " .. GameConfig.MaxPlayers)
-
--- Initialize game state
-local GameState = {
-    IsActive = false,
-    CurrentRound = 0,
-    Players = {}
-}
-
--- Function to start a new game round
-local function StartRound()
-    GameState.CurrentRound = GameState.CurrentRound + 1
-    GameState.IsActive = true
-    print("Round " .. GameState.CurrentRound .. " started!")
-    print("Round duration: " .. GameConfig.RoundDuration .. " seconds")
-end
-
--- Function to end the current round
-local function EndRound()
-    GameState.IsActive = false
-    print("Round " .. GameState.CurrentRound .. " ended!")
+-- Function to make a character big
+local function makeCharacterBig(character)
+    -- Wait for the humanoid to load
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    -- Scale up the character to 3x normal size
+    local scaleValue = 3
+    
+    -- Check if BodyHeightScale exists (R15) or scale all parts (R6)
+    local bodyHeightScale = humanoid:FindFirstChild("BodyHeightScale")
+    local bodyWidthScale = humanoid:FindFirstChild("BodyWidthScale")
+    local bodyDepthScale = humanoid:FindFirstChild("BodyDepthScale")
+    
+    if bodyHeightScale then
+        -- R15 character - use scale values
+        bodyHeightScale.Value = scaleValue
+        bodyWidthScale.Value = scaleValue
+        bodyDepthScale.Value = scaleValue
+        print("Made " .. character.Name .. " BIG! (R15)")
+    else
+        -- R6 character - scale the humanoid's scale property
+        humanoid:SetAttribute("BodyHeightScale", scaleValue)
+        humanoid:SetAttribute("BodyWidthScale", scaleValue)
+        humanoid:SetAttribute("BodyDepthScale", scaleValue)
+        print("Made " .. character.Name .. " BIG! (R6)")
+    end
 end
 
 -- Function to handle player joining
-local function OnPlayerJoin(player)
-    table.insert(GameState.Players, player.Name)
+local function onPlayerAdded(player)
     print("Player joined: " .. player.Name)
-    print("Total players: " .. #GameState.Players)
-end
-
--- Function to handle player leaving
-local function OnPlayerLeave(player)
-    for i, name in ipairs(GameState.Players) do
-        if name == player.Name then
-            table.remove(GameState.Players, i)
-            break
-        end
+    
+    -- Make their character big when it spawns
+    player.CharacterAdded:Connect(function(character)
+        makeCharacterBig(character)
+    end)
+    
+    -- Also handle if they already have a character
+    if player.Character then
+        makeCharacterBig(player.Character)
     end
-    print("Player left: " .. player.Name)
-    print("Total players: " .. #GameState.Players)
 end
 
--- Connect player events
-game.Players.PlayerAdded:Connect(OnPlayerJoin)
-game.Players.PlayerRemoving:Connect(OnPlayerLeave)
+-- Connect to all players joining
+game.Players.PlayerAdded:Connect(onPlayerAdded)
 
--- Start the first round
-StartRound()
+-- Handle players already in the game (for testing in Studio)
+for _, player in pairs(game.Players:GetPlayers()) do
+    onPlayerAdded(player)
+end
 
--- Game loop (placeholder for future expansion)
-print("Game initialized successfully!")
-print("Save the World is now running...")
+print("Character scaling script ready! Players will be BIG!")
