@@ -28,6 +28,7 @@ local DEFAULT_CONFIG = {
 	
 	-- Detection
 	structureDetectionRange = 18,
+	blockingStructureRange = 12, -- Range to detect structures blocking path
 	playerAcquireRange = 25, -- Range to start chasing player
 	playerLoseRange = 32, -- Range to stop chasing player (hysteresis)
 	playerCommitTime = 1.0, -- Seconds to keep chasing player before reconsidering
@@ -43,6 +44,7 @@ local DEFAULT_CONFIG = {
 	stuckDetectionTime = 1.0, -- Time to wait before checking if stuck
 	stuckDistanceThreshold = 1, -- If moved less than this in stuckDetectionTime, recalc path
 	targetMovedThreshold = 6, -- Recalc if target moved this far
+	stuckAttackThreshold = 2, -- After this many consecutive stuck detections, attack nearest structure
 	
 	-- Callbacks
 	damageTarget = nil, -- function(target: Instance, amount: number)
@@ -109,6 +111,7 @@ function ZombieAI.new(model, baseCore, config)
 	-- Stuck detection
 	self.lastStuckCheckTime = 0
 	self.lastStuckCheckPosition = nil
+	self.consecutiveStuckCount = 0 -- Track how many times zombie has been stuck consecutively
 	
 	-- Connection tracking
 	self.connections = {}
@@ -389,6 +392,26 @@ function ZombieAI:UpdateMove()
 			local distanceMoved = (self.rootPart.Position - self.lastStuckCheckPosition).Magnitude
 			if distanceMoved < self.config.stuckDistanceThreshold then
 				needsRecalc = true
+				self.consecutiveStuckCount = self.consecutiveStuckCount + 1
+				
+				-- If stuck multiple times, attack nearest blocking structure
+				if self.consecutiveStuckCount >= self.config.stuckAttackThreshold then
+					local blockingStructure = self:FindNearestBlockingStructure()
+					if blockingStructure then
+						-- Switch target to blocking structure
+						self.currentTarget = blockingStructure
+						self.currentTargetType = "Structure"
+						self.lastTargetSwitchTime = currentTime
+						self.consecutiveStuckCount = 0 -- Reset stuck count
+						self.currentPath = nil
+						self.lastTargetPosition = nil
+						-- Recalculate path to structure
+						targetPosition = blockingStructure.Position
+					end
+				end
+			else
+				-- Moved successfully, reset stuck count
+				self.consecutiveStuckCount = 0
 			end
 		end
 		self.lastStuckCheckTime = currentTime
@@ -508,6 +531,29 @@ function ZombieAI:FindNearestStructure()
 	end
 	
 	return nearestStructure, nearestDistance
+end
+
+--[[
+	Finds the nearest structure that is likely blocking the zombie's path
+	Used when zombie gets stuck repeatedly
+	@return BasePart or nil
+]]
+function ZombieAI:FindNearestBlockingStructure()
+	local structures = CollectionService:GetTagged("Structure")
+	local nearestStructure = nil
+	local nearestDistance = self.config.blockingStructureRange
+	
+	for _, structure in ipairs(structures) do
+		if structure:IsA("BasePart") and structure.Parent then
+			local distance = (self.rootPart.Position - structure.Position).Magnitude
+			if distance < nearestDistance then
+				nearestDistance = distance
+				nearestStructure = structure
+			end
+		end
+	end
+	
+	return nearestStructure
 end
 
 --[[
@@ -667,6 +713,27 @@ function ZombieAI:SetState(newState)
 					-- Mark as stuck and force recalculation
 					self.currentPath = nil
 					self._lastMoveToPosition = nil
+					self.consecutiveStuckCount = self.consecutiveStuckCount + 1
+					
+					-- If stuck multiple times from MoveToFinished failures, attack nearest structure
+					if self.consecutiveStuckCount >= self.config.stuckAttackThreshold then
+						local blockingStructure = self:FindNearestBlockingStructure()
+						if blockingStructure then
+							-- Switch target to blocking structure
+							self.currentTarget = blockingStructure
+							self.currentTargetType = "Structure"
+							self.lastTargetSwitchTime = time()
+							self.consecutiveStuckCount = 0 -- Reset stuck count
+							self.currentPath = nil
+							self.lastTargetPosition = nil
+							
+							-- Try to calculate path to structure
+							self:CalculatePath(blockingStructure.Position)
+							self.lastTargetPosition = blockingStructure.Position
+							self:IssueMoveToCurrentWaypoint()
+							return
+						end
+					end
 					
 					-- Get current target position and recalculate immediately
 					local targetPosition = self:GetTargetPosition(self.currentTarget)
