@@ -1,16 +1,18 @@
 --[[
 	HealthBarClient.client.lua
-	Renders health bars above all structures (walls and floors)
+	Renders health bars above structures ONLY when hovering over them
+	Also adds dark outlines to all structures
 	
-	Automatically creates BillboardGuis with health bars for all structures
 	Updates in real-time when structures take damage
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
+local mouse = player:GetMouse()
 
 -- Health bar configuration
 local HEALTH_BAR_CONFIG = {
@@ -19,8 +21,10 @@ local HEALTH_BAR_CONFIG = {
 	updateInterval = 0.1, -- Update health bars every 0.1 seconds
 }
 
--- Store health bars for cleanup
+-- Store health bars and outlines for cleanup
 local healthBars = {} -- { [structure] = billboardGui }
+local outlines = {} -- { [structure] = selectionBox }
+local currentHoveredStructure = nil
 
 -- Color gradient based on health percentage
 local function GetHealthColor(healthPercent)
@@ -39,7 +43,7 @@ local function GetHealthColor(healthPercent)
 	end
 end
 
--- Create health bar for a structure
+-- Create health bar for a structure (hidden by default)
 local function CreateHealthBar(structure)
 	if not structure:IsA("BasePart") then
 		return
@@ -57,6 +61,7 @@ local function CreateHealthBar(structure)
 	billboard.StudsOffset = HEALTH_BAR_CONFIG.studOffset
 	billboard.AlwaysOnTop = true
 	billboard.Adornee = structure
+	billboard.Enabled = false  -- Hidden by default
 	
 	-- Background frame
 	local background = Instance.new("Frame")
@@ -102,6 +107,31 @@ local function CreateHealthBar(structure)
 	healthText.Text = string.format("%d%%", math.floor(healthPercent * 100))
 end
 
+-- Create dark outline for a structure
+local function CreateOutline(structure)
+	if not structure:IsA("BasePart") then
+		return
+	end
+	
+	-- Don't create multiple outlines
+	if outlines[structure] then
+		return
+	end
+	
+	-- Create SelectionBox
+	local selectionBox = Instance.new("SelectionBox")
+	selectionBox.Name = "StructureOutline"
+	selectionBox.Adornee = structure
+	selectionBox.LineThickness = 0.03
+	selectionBox.Color3 = Color3.fromRGB(30, 30, 30)  -- Dark outline
+	selectionBox.SurfaceColor3 = Color3.fromRGB(30, 30, 30)
+	selectionBox.SurfaceTransparency = 1  -- No surface fill, just outline
+	selectionBox.Parent = structure
+	
+	-- Store reference
+	outlines[structure] = selectionBox
+end
+
 -- Update health bar display
 local function UpdateHealthBar(structure)
 	local billboard = healthBars[structure]
@@ -139,10 +169,20 @@ local function RemoveHealthBar(structure)
 	end
 end
 
--- Initialize health bars for existing structures
+-- Remove outline when structure is removed
+local function RemoveOutline(structure)
+	local selectionBox = outlines[structure]
+	if selectionBox then
+		selectionBox:Destroy()
+		outlines[structure] = nil
+	end
+end
+
+-- Initialize health bars and outlines for existing structures
 local function InitializeExistingStructures()
 	for _, structure in ipairs(CollectionService:GetTagged("Structure")) do
 		CreateHealthBar(structure)
+		CreateOutline(structure)
 	end
 end
 
@@ -150,11 +190,13 @@ end
 CollectionService:GetInstanceAddedSignal("Structure"):Connect(function(structure)
 	task.wait(0.1) -- Small delay to ensure attributes are set
 	CreateHealthBar(structure)
+	CreateOutline(structure)
 end)
 
 -- Listen for removed structures
 CollectionService:GetInstanceRemovedSignal("Structure"):Connect(function(structure)
 	RemoveHealthBar(structure)
+	RemoveOutline(structure)
 end)
 
 -- Update health bars periodically
@@ -166,12 +208,46 @@ RunService.RenderStepped:Connect(function()
 	end
 	lastUpdateTime = now
 	
-	-- Update all health bars
+	-- Check what the mouse is hovering over
+	local target = mouse.Target
+	local hoveredStructure = nil
+	
+	-- Check if target is a structure or part of a structure
+	if target and CollectionService:HasTag(target, "Structure") then
+		hoveredStructure = target
+	end
+	
+	-- Update health bar visibility
+	if hoveredStructure ~= currentHoveredStructure then
+		-- Hide previous health bar
+		if currentHoveredStructure and healthBars[currentHoveredStructure] then
+			healthBars[currentHoveredStructure].Enabled = false
+		end
+		
+		-- Show new health bar
+		if hoveredStructure and healthBars[hoveredStructure] then
+			healthBars[hoveredStructure].Enabled = true
+		end
+		
+		currentHoveredStructure = hoveredStructure
+	end
+	
+	-- Update currently visible health bar
+	if currentHoveredStructure and healthBars[currentHoveredStructure] then
+		UpdateHealthBar(currentHoveredStructure)
+	end
+	
+	-- Clean up health bars for destroyed structures
 	for structure, _ in pairs(healthBars) do
-		if structure and structure.Parent then
-			UpdateHealthBar(structure)
-		else
+		if not structure or not structure.Parent then
 			healthBars[structure] = nil
+		end
+	end
+	
+	-- Clean up outlines for destroyed structures
+	for structure, _ in pairs(outlines) do
+		if not structure or not structure.Parent then
+			outlines[structure] = nil
 		end
 	end
 end)
@@ -179,4 +255,4 @@ end)
 -- Initialize
 InitializeExistingStructures()
 
-print("[HealthBarClient] Initialized - health bars will appear above all structures")
+print("[HealthBarClient] Initialized - health bars show on hover, all structures have dark outlines")

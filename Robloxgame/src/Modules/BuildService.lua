@@ -21,7 +21,7 @@ BuildService.__index = BuildService
 local TILE_SIZE = 12
 local FLOOR_SIZE = Vector3.new(TILE_SIZE, 1, TILE_SIZE)
 local WALL_SIZE = Vector3.new(TILE_SIZE, 8, 1)
-local RAMP_SIZE = Vector3.new(TILE_SIZE, 1, TILE_SIZE)  -- Same footprint as floor
+local RAMP_SIZE = Vector3.new(TILE_SIZE, 8, TILE_SIZE)  -- Fortnite-style: 8 studs tall like walls
 local FLOOR_Y = 0.5  -- Consistent floor placement height
 
 -- Helper to get or create folders
