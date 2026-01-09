@@ -91,6 +91,7 @@ function ZombieAI.new(model, baseCore, config)
 	-- Pathfinding
 	self.currentPath = nil
 	self.currentWaypoint = 1
+	self.currentWaypointPosition = nil -- Track last waypoint we moved to
 	
 	-- Connection tracking
 	self.connections = {}
