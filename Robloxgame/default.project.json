@@ -5,6 +5,7 @@
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "CharacterScaleTest": {
+        "$className": "Script",
         "$path": "src/Script.lua"
       }
     }
