@@ -52,8 +52,9 @@ function BaseCoreHealth.new(baseCorePart, config)
 	self.currentHealth = self.maxHealth
 	self.isDestroyed = false
 	
-	-- Create Destroyed event
-	self.Destroyed = Instance.new("BindableEvent")
+	-- Create Destroyed event (internal)
+	self._destroyedEvent = Instance.new("BindableEvent")
+	self.Destroyed = self._destroyedEvent.Event
 	
 	-- Set debug attributes on the part
 	self.baseCorePart:SetAttribute("Health", self.currentHealth)
@@ -90,7 +91,7 @@ function BaseCoreHealth:Damage(amount, source)
 	-- Check if destroyed (ensure event fires only once)
 	if self.currentHealth <= 0 and not self.isDestroyed then
 		self.isDestroyed = true
-		self.Destroyed:Fire()
+		self._destroyedEvent:Fire()
 	end
 end
 
@@ -132,10 +133,12 @@ end
 
 -- Cleanup: Disconnect and destroy resources
 function BaseCoreHealth:Destroy()
-	if self.Destroyed then
-		self.Destroyed:Destroy()
-		self.Destroyed = nil
+	if self._destroyedEvent then
+		self._destroyedEvent:Destroy()
+		self._destroyedEvent = nil
 	end
+	
+	self.Destroyed = nil
 	
 	-- Clear debug attributes if part still exists
 	if self.baseCorePart and self.baseCorePart.Parent then
