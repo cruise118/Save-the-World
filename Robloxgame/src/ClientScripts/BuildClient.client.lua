@@ -27,7 +27,7 @@ local deselectSlotRemote = buildEvents:WaitForChild("DeselectSlot")
 -- Build mode state
 local buildMode = {
 	active = false,
-	selectedSlot = nil,  -- 1 = floor, 2 = wall, 3 = trap
+	selectedSlot = nil,  -- 1-6 = floor, wall, trap, ramp, door, window
 	rotation = 0,  -- Current rotation angle
 	ghost = nil,  -- Current ghost preview part
 	maxDistance = 50,  -- Max build distance
@@ -42,6 +42,9 @@ local SLOT_CONFIG = {
 	[1] = { type = "floor", size = Vector3.new(16, 1, 16), color = Color3.fromRGB(120, 120, 120), name = "Floor" },
 	[2] = { type = "wall", size = Vector3.new(16, 8, 1), color = Color3.fromRGB(150, 150, 150), name = "Wall" },
 	[3] = { type = "trap", size = Vector3.new(15.8, 0.5, 15.8), color = Color3.fromRGB(180, 50, 50), name = "Spike Trap" },
+	[4] = { type = "ramp", size = Vector3.new(16, 1, 16), color = Color3.fromRGB(130, 130, 100), name = "Ramp" },
+	[5] = { type = "walldoor", size = Vector3.new(16, 8, 1), color = Color3.fromRGB(180, 180, 150), name = "Wall with Door" },
+	[6] = { type = "wallwindow", size = Vector3.new(16, 8, 1), color = Color3.fromRGB(170, 170, 180), name = "Wall with Window" },
 }
 
 -- Snap position to grid
@@ -68,16 +71,43 @@ local function UpdateGhost()
 		return
 	end
 	
-	-- Create ghost part
-	local ghost = Instance.new("Part")
-	ghost.Name = "BuildGhost"
-	ghost.Size = config.size
-	ghost.Anchored = true
-	ghost.CanCollide = false
-	ghost.Transparency = 0.5
-	ghost.Material = Enum.Material.SmoothPlastic
-	ghost.Color = config.color
-	ghost.Parent = workspace
+	-- Create ghost based on structure type
+	local ghost
+	
+	if config.type == "ramp" then
+		-- Ramps use WedgeParts
+		ghost = Instance.new("WedgePart")
+		ghost.Name = "BuildGhost"
+		ghost.Size = config.size
+		ghost.Anchored = true
+		ghost.CanCollide = false
+		ghost.Transparency = 0.5
+		ghost.Material = Enum.Material.SmoothPlastic
+		ghost.Color = config.color
+		ghost.Parent = workspace
+	elseif config.type == "walldoor" or config.type == "wallwindow" then
+		-- For doors and windows, create a simplified preview (just show as a regular wall for now)
+		ghost = Instance.new("Part")
+		ghost.Name = "BuildGhost"
+		ghost.Size = config.size
+		ghost.Anchored = true
+		ghost.CanCollide = false
+		ghost.Transparency = 0.5
+		ghost.Material = Enum.Material.SmoothPlastic
+		ghost.Color = config.color
+		ghost.Parent = workspace
+	else
+		-- Regular structures (floor, wall, trap)
+		ghost = Instance.new("Part")
+		ghost.Name = "BuildGhost"
+		ghost.Size = config.size
+		ghost.Anchored = true
+		ghost.CanCollide = false
+		ghost.Transparency = 0.5
+		ghost.Material = Enum.Material.SmoothPlastic
+		ghost.Color = config.color
+		ghost.Parent = workspace
+	end
 	
 	buildMode.ghost = ghost
 end
@@ -177,8 +207,8 @@ local function UpdateGhostPosition()
 			buildMode.ghost.Position = snappedPos
 			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
 			
-		elseif config.type == "wall" then
-			-- Wall: snap to nearest floor edge
+		elseif config.type == "wall" or config.type == "walldoor" or config.type == "wallwindow" then
+			-- Wall/Door/Window: snap to nearest floor edge
 			local closestFloor = FindClosestFloor(hitPos)
 			if closestFloor then
 				local wallPos, wallOrientation = CalculateWallEdgePosition(hitPos, closestFloor)
@@ -198,6 +228,12 @@ local function UpdateGhostPosition()
 			local snappedPos = SnapToGrid(hitPos)
 			buildMode.ghost.Position = Vector3.new(snappedPos.X, 0.75, snappedPos.Z)
 			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
+			
+		elseif config.type == "ramp" then
+			-- Ramp: simple grid snapping like floor
+			local snappedPos = SnapToGrid(hitPos)
+			buildMode.ghost.Position = Vector3.new(snappedPos.X, 0.5 + config.size.Y / 2, snappedPos.Z)
+			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
 		end
 		
 		-- Check if within build distance (only update color if not already red)
@@ -206,7 +242,7 @@ local function UpdateGhostPosition()
 			buildMode.ghost.Color = Color3.fromRGB(255, 100, 100)  -- Red for out of range
 		else
 			-- Only set to normal color if wall has floor or not a wall
-			if config.type ~= "wall" or FindClosestFloor(hitPos) then
+			if config.type ~= "wall" and config.type ~= "walldoor" and config.type ~= "wallwindow" or FindClosestFloor(hitPos) then
 				buildMode.ghost.Color = config.color  -- Normal color
 			end
 		end
@@ -313,13 +349,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		return
 	end
 	
-	-- Number keys 1-3 for slot selection
+	-- Number keys 1-6 for slot selection
 	if input.KeyCode == Enum.KeyCode.One then
 		SelectSlot(1)
 	elseif input.KeyCode == Enum.KeyCode.Two then
 		SelectSlot(2)
 	elseif input.KeyCode == Enum.KeyCode.Three then
 		SelectSlot(3)
+	elseif input.KeyCode == Enum.KeyCode.Four then
+		SelectSlot(4)
+	elseif input.KeyCode == Enum.KeyCode.Five then
+		SelectSlot(5)
+	elseif input.KeyCode == Enum.KeyCode.Six then
+		SelectSlot(6)
 	elseif input.KeyCode == Enum.KeyCode.R then
 		-- R to rotate
 		RotateGhost()
