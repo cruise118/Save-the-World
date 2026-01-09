@@ -9,9 +9,9 @@ This is a Roblox game project designed to create an engaging gaming experience. 
 Save-the-World/
 ├── README.md
 └── Robloxgame/
-    ├── default.project.json  # Rojo project configuration
+    ├── default.project.json     # Rojo project configuration
     └── src/
-        └── MakeBigScript.lua # Test script to verify Rojo setup
+        └── MakeBigScript.server.lua # Test script (Script type via .server.lua extension)
 ```
 
 ## Getting Started
@@ -28,7 +28,7 @@ Save-the-World/
 5. Connect to Rojo from Roblox Studio
 
 ## Development
-The test script is located in `Robloxgame/src/MakeBigScript.lua`. This script runs in ServerScriptService as a Script (not ModuleScript) and will make your character 3x bigger when you spawn, which helps verify that Rojo syncing is working correctly.
+The test script is located in `Robloxgame/src/MakeBigScript.server.lua`. The `.server.lua` extension tells Rojo to create it as a Script (not ModuleScript), so it runs automatically in ServerScriptService. The script will make your character 3x bigger when you spawn, which helps verify that Rojo syncing is working correctly.
 
 ### Testing Rojo Setup
 1. Run `rojo serve` in the Robloxgame directory
