@@ -82,6 +82,67 @@ local function UpdateGhost()
 	buildMode.ghost = ghost
 end
 
+-- Find closest floor to position (for wall placement)
+local function FindClosestFloor(position)
+	local structuresFolder = workspace:FindFirstChild("Structures")
+	if not structuresFolder then
+		return nil
+	end
+	
+	local closestFloor = nil
+	local closestDist = math.huge
+	local checkDistance = TILE_SIZE * 1.5
+	
+	for _, child in ipairs(structuresFolder:GetChildren()) do
+		if child:IsA("BasePart") and child.Name == "Floor" then
+			local dist = (child.Position - position).Magnitude
+			if dist < closestDist and dist <= checkDistance then
+				closestDist = dist
+				closestFloor = child
+			end
+		end
+	end
+	
+	return closestFloor
+end
+
+-- Calculate wall edge position (matching server logic)
+local function CalculateWallEdgePosition(position, floorPart)
+	local floorPos = floorPart.Position
+	local relativePos = position - floorPos
+	local halfTile = TILE_SIZE / 2
+	local wallSize = SLOT_CONFIG[2].size  -- Wall config
+	
+	local wallPos, wallOrientation
+	
+	-- Determine edge based on which component is larger
+	if math.abs(relativePos.X) > math.abs(relativePos.Z) then
+		-- East or West edge
+		if relativePos.X > 0 then
+			-- East edge (+X)
+			wallPos = Vector3.new(floorPos.X + halfTile, wallSize.Y / 2 + 0.5, floorPos.Z)
+			wallOrientation = Vector3.new(0, 90, 0)
+		else
+			-- West edge (-X)
+			wallPos = Vector3.new(floorPos.X - halfTile, wallSize.Y / 2 + 0.5, floorPos.Z)
+			wallOrientation = Vector3.new(0, 90, 0)
+		end
+	else
+		-- North or South edge
+		if relativePos.Z > 0 then
+			-- North edge (+Z)
+			wallPos = Vector3.new(floorPos.X, wallSize.Y / 2 + 0.5, floorPos.Z + halfTile)
+			wallOrientation = Vector3.new(0, 0, 0)
+		else
+			-- South edge (-Z)
+			wallPos = Vector3.new(floorPos.X, wallSize.Y / 2 + 0.5, floorPos.Z - halfTile)
+			wallOrientation = Vector3.new(0, 0, 0)
+		end
+	end
+	
+	return wallPos, wallOrientation
+end
+
 -- Update ghost position based on mouse
 local function UpdateGhostPosition()
 	if not buildMode.ghost or not buildMode.active then
@@ -108,28 +169,46 @@ local function UpdateGhostPosition()
 	
 	if result then
 		local hitPos = result.Position
-		local snappedPos = SnapToGrid(hitPos)
-		
-		-- Adjust Y position based on type
 		local config = SLOT_CONFIG[buildMode.selectedSlot]
+		
 		if config.type == "floor" then
+			-- Floor: simple grid snapping
+			local snappedPos = SnapToGrid(hitPos)
 			buildMode.ghost.Position = snappedPos
+			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
+			
 		elseif config.type == "wall" then
-			buildMode.ghost.Position = Vector3.new(snappedPos.X, config.size.Y / 2 + 0.5, snappedPos.Z)
+			-- Wall: snap to nearest floor edge
+			local closestFloor = FindClosestFloor(hitPos)
+			if closestFloor then
+				local wallPos, wallOrientation = CalculateWallEdgePosition(hitPos, closestFloor)
+				buildMode.ghost.Position = wallPos
+				buildMode.ghost.Orientation = wallOrientation
+				-- Wall color indicates if floor found (normal color = valid)
+			else
+				-- No floor nearby - show at grid position but indicate invalid
+				local snappedPos = SnapToGrid(hitPos)
+				buildMode.ghost.Position = Vector3.new(snappedPos.X, config.size.Y / 2 + 0.5, snappedPos.Z)
+				buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
+				buildMode.ghost.Color = Color3.fromRGB(255, 100, 100)  -- Red for no floor nearby
+			end
+			
 		elseif config.type == "trap" then
-			-- Snap to floor position
+			-- Trap: snap to floor position
+			local snappedPos = SnapToGrid(hitPos)
 			buildMode.ghost.Position = Vector3.new(snappedPos.X, 0.75, snappedPos.Z)
+			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
 		end
 		
-		-- Apply rotation
-		buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-		
-		-- Check if within build distance
+		-- Check if within build distance (only update color if not already red)
 		local distance = (rootPart.Position - buildMode.ghost.Position).Magnitude
 		if distance > buildMode.maxDistance then
 			buildMode.ghost.Color = Color3.fromRGB(255, 100, 100)  -- Red for out of range
 		else
-			buildMode.ghost.Color = config.color  -- Normal color
+			-- Only set to normal color if wall has floor or not a wall
+			if config.type ~= "wall" or FindClosestFloor(hitPos) then
+				buildMode.ghost.Color = config.color  -- Normal color
+			end
 		end
 	else
 		-- No hit, hide ghost
