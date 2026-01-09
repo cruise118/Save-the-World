@@ -93,6 +93,7 @@ function ZombieAI.new(model, baseCore, config)
 	-- Connection tracking
 	self.connections = {}
 	self.isActive = false
+	self._loopRunning = false
 	
 	return self
 end
@@ -107,7 +108,13 @@ function ZombieAI:Start()
 		return
 	end
 	
+	-- Prevent multiple loops from starting
+	if self._loopRunning then
+		return
+	end
+	
 	self.isActive = true
+	self._loopRunning = true
 	self.state = State.Idle
 	
 	-- Set humanoid properties
@@ -125,6 +132,8 @@ function ZombieAI:Start()
 			self:Update()
 			task.wait(0.1)
 		end
+		-- Loop exited, clear flag
+		self._loopRunning = false
 	end)
 	
 	print(string.format("ZombieAI: Started for %s", self.model.Name))
@@ -135,6 +144,11 @@ end
 ]]
 function ZombieAI:Stop()
 	self.isActive = false
+	
+	-- Halt movement
+	if self.humanoid and self.humanoid.Parent and self.rootPart and self.rootPart.Parent then
+		self.humanoid:MoveTo(self.rootPart.Position)
+	end
 	
 	-- Disconnect all connections
 	for _, connection in ipairs(self.connections) do
@@ -150,6 +164,12 @@ end
 ]]
 function ZombieAI:Update()
 	if not self.isActive or self.state == State.Dead then
+		return
+	end
+	
+	-- Safety checks: ensure model and rootPart still exist
+	if not self.model.Parent or not self.rootPart.Parent then
+		self:Stop()
 		return
 	end
 	
@@ -174,7 +194,7 @@ end
 ]]
 function ZombieAI:UpdateIdle()
 	-- Find nearest structure or use base core
-	local target = self:FindNearestStructure()
+	local target, _ = self:FindNearestStructure()
 	if not target then
 		target = self.baseCore
 	end
@@ -187,11 +207,15 @@ end
 	Move state: Pathfind toward current target
 ]]
 function ZombieAI:UpdateMove()
-	-- Check if we should update target
-	local nearestStructure = self:FindNearestStructure()
+	-- Check if we should update target (reduce jitter with threshold)
+	local nearestStructure, nearestDistance = self:FindNearestStructure()
 	if nearestStructure and nearestStructure ~= self.currentTarget then
-		self.currentTarget = nearestStructure
-		self.currentPath = nil -- Force path recalculation
+		-- Only switch if meaningfully closer (20% threshold)
+		local currentTargetDistance = (self.rootPart.Position - self.currentTarget.Position).Magnitude
+		if nearestDistance < currentTargetDistance * 0.8 then
+			self.currentTarget = nearestStructure
+			self.currentPath = nil -- Force path recalculation
+		end
 	end
 	
 	-- Validate target still exists
@@ -276,7 +300,7 @@ end
 
 --[[
 	Finds the nearest player-built structure within detection range
-	@return BasePart or nil
+	@return BasePart or nil, distance number or nil
 ]]
 function ZombieAI:FindNearestStructure()
 	local structures = CollectionService:GetTagged("Structure")
@@ -293,7 +317,7 @@ function ZombieAI:FindNearestStructure()
 		end
 	end
 	
-	return nearestStructure
+	return nearestStructure, nearestDistance
 end
 
 --[[

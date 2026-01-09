@@ -40,6 +40,7 @@ function DamageService.RegisterBaseCore(baseCorePart, baseCoreHealthInstance)
 	assert(RunService:IsServer(), "DamageService must run on the server")
 	assert(baseCorePart and baseCorePart:IsA("BasePart"), "baseCorePart must be a BasePart")
 	assert(baseCoreHealthInstance, "baseCoreHealthInstance is required")
+	assert(typeof(baseCoreHealthInstance.Damage) == "function", "baseCoreHealthInstance must have a Damage method")
 	
 	registeredBaseCores[baseCorePart] = baseCoreHealthInstance
 end
@@ -89,12 +90,19 @@ function DamageService.Damage(target, amount, source)
 	-- Route to registered base core
 	if registeredBaseCores[target] then
 		local baseCoreHealth = registeredBaseCores[target]
-		baseCoreHealth:Damage(amount, source)
-		return true
+		-- Ensure the instance still exists and has the method
+		if baseCoreHealth and typeof(baseCoreHealth.Damage) == "function" then
+			baseCoreHealth:Damage(amount, source)
+			return true
+		else
+			-- Clean up invalid registration
+			registeredBaseCores[target] = nil
+			return false
+		end
 	end
 	
 	-- Route to structure handler
-	if CollectionService:HasTag(target, "Structure") then
+	if target:IsA("BasePart") and CollectionService:HasTag(target, "Structure") then
 		if structureDamageHandler then
 			structureDamageHandler(target, amount, source)
 			return true

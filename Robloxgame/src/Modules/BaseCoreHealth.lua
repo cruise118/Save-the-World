@@ -68,7 +68,7 @@ function BaseCoreHealth:Damage(amount, source)
 		return
 	end
 	
-	assert(typeof(amount) == "number" and amount >= 0, "Damage amount must be a non-negative number")
+	assert(typeof(amount) == "number" and amount > 0, "Damage amount must be a positive number")
 	
 	-- Clamp damage if configured
 	if self.config.clampDamage then
@@ -83,9 +83,11 @@ function BaseCoreHealth:Damage(amount, source)
 	end
 	
 	-- Update debug attribute
-	self.baseCorePart:SetAttribute("Health", self.currentHealth)
+	if self.baseCorePart and self.baseCorePart.Parent then
+		self.baseCorePart:SetAttribute("Health", self.currentHealth)
+	end
 	
-	-- Check if destroyed
+	-- Check if destroyed (ensure event fires only once)
 	if self.currentHealth <= 0 and not self.isDestroyed then
 		self.isDestroyed = true
 		self.Destroyed:Fire()
@@ -98,7 +100,7 @@ function BaseCoreHealth:Heal(amount)
 		return
 	end
 	
-	assert(typeof(amount) == "number" and amount >= 0, "Heal amount must be a non-negative number")
+	assert(typeof(amount) == "number" and amount > 0, "Heal amount must be a positive number")
 	
 	self.currentHealth = self.currentHealth + amount
 	
@@ -108,7 +110,9 @@ function BaseCoreHealth:Heal(amount)
 	end
 	
 	-- Update debug attribute
-	self.baseCorePart:SetAttribute("Health", self.currentHealth)
+	if self.baseCorePart and self.baseCorePart.Parent then
+		self.baseCorePart:SetAttribute("Health", self.currentHealth)
+	end
 end
 
 -- Get current health
@@ -131,6 +135,12 @@ function BaseCoreHealth:Destroy()
 	if self.Destroyed then
 		self.Destroyed:Destroy()
 		self.Destroyed = nil
+	end
+	
+	-- Clear debug attributes if part still exists
+	if self.baseCorePart and self.baseCorePart.Parent then
+		self.baseCorePart:SetAttribute("Health", nil)
+		self.baseCorePart:SetAttribute("MaxHealth", nil)
 	end
 	
 	self.baseCorePart = nil
