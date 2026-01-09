@@ -28,7 +28,15 @@ Save-the-World/
 5. Connect to Rojo from Roblox Studio
 
 ## Development
-The main game logic is located in `Robloxgame/src/Script.lua`. This script runs in the Workspace and contains the core game functionality.
+The test script is located in `Robloxgame/src/Script.lua`. This script runs in ServerScriptService and will make your character 3x bigger when you spawn, which helps verify that Rojo syncing is working correctly.
+
+### Testing Rojo Setup
+1. Run `rojo serve` in the Robloxgame directory
+2. Open Roblox Studio and create a new place or open an existing one
+3. Install the Rojo plugin in Studio if you haven't already
+4. Click the Rojo plugin and connect to localhost:34872
+5. Click "Play" in Studio - your character should spawn 3x bigger!
+6. Check the Output window for confirmation messages
 
 ## Contributing
 Contributions are welcome! Feel free to submit issues or pull requests.

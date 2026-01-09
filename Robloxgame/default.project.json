@@ -2,9 +2,9 @@
   "name": "My Roblox Game",
   "tree": {
     "$className": "DataModel",
-    "Workspace": {
-      "$className": "Workspace",
-      "Script": {
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "CharacterScaleTest": {
         "$path": "src/Script.lua"
       }
     }
