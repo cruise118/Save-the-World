@@ -73,6 +73,11 @@ function ZombieAI.new(model, baseCore, config)
 		self.config[key] = if config and config[key] ~= nil then config[key] else value
 	end
 	
+	-- Validate damageTarget if provided
+	if self.config.damageTarget ~= nil then
+		assert(typeof(self.config.damageTarget) == "function", "damageTarget must be a function")
+	end
+	
 	-- State management
 	self.state = State.Idle
 	self.currentTarget = nil -- Current structure or base core being targeted
@@ -96,6 +101,8 @@ end
 	Starts the zombie AI behavior
 ]]
 function ZombieAI:Start()
+	assert(RunService:IsServer(), "ZombieAI must run on the server")
+	
 	if self.isActive then
 		return
 	end
@@ -112,10 +119,13 @@ function ZombieAI:Start()
 		self:Stop()
 	end))
 	
-	-- Main update loop
-	table.insert(self.connections, RunService.Heartbeat:Connect(function(deltaTime)
-		self:Update(deltaTime)
-	end))
+	-- Main update loop using task.spawn
+	task.spawn(function()
+		while self.isActive do
+			self:Update()
+			task.wait(0.1)
+		end
+	end)
 	
 	print(string.format("ZombieAI: Started for %s", self.model.Name))
 end
@@ -136,9 +146,9 @@ function ZombieAI:Stop()
 end
 
 --[[
-	Main update loop - called every frame
+	Main update loop - called periodically
 ]]
-function ZombieAI:Update(deltaTime)
+function ZombieAI:Update()
 	if not self.isActive or self.state == State.Dead then
 		return
 	end
@@ -197,7 +207,7 @@ function ZombieAI:UpdateMove()
 	end
 	
 	-- Update pathfinding
-	local currentTime = tick()
+	local currentTime = time()
 	if not self.currentPath or (currentTime - self.lastPathUpdateTime) >= self.config.pathfindingUpdateInterval then
 		self:CalculatePath(self.currentTarget.Position)
 		self.lastPathUpdateTime = currentTime
@@ -237,7 +247,7 @@ function ZombieAI:UpdateAttack()
 	end
 	
 	-- Attack on cooldown
-	local currentTime = tick()
+	local currentTime = time()
 	if (currentTime - self.lastAttackTime) >= self.config.attackCooldown then
 		self:PerformAttack(self.currentTarget)
 		self.lastAttackTime = currentTime
@@ -313,10 +323,12 @@ function ZombieAI:CalculatePath(targetPosition)
 			table.insert(self.currentPath, waypoint.Position)
 		end
 		
+		-- Reset waypoint index on new path
 		self.currentWaypoint = 1
 	else
 		-- Path failed, clear path and move directly
 		self.currentPath = nil
+		self.currentWaypoint = 1
 		if errorMessage then
 			warn(string.format("ZombieAI: Pathfinding failed for %s: %s", self.model.Name, errorMessage))
 		end
