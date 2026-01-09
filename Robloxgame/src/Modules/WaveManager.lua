@@ -10,6 +10,7 @@
 		local WaveManager = require(...)
 		local manager = WaveManager.new({
 			baseCoreHealth = coreHealthInstance,
+			baseCorePart = baseCorePart,
 			zombieTemplate = zombieModel,
 			spawnPoints = {spawnPart1, spawnPart2},
 			damageService = DamageService
@@ -47,6 +48,7 @@ function WaveManager.new(config)
 	assert(RunService:IsServer(), "WaveManager must run on the server")
 	assert(config, "Config is required")
 	assert(config.baseCoreHealth, "baseCoreHealth is required")
+	assert(config.baseCorePart, "baseCorePart is required")
 	assert(config.zombieTemplate, "zombieTemplate is required")
 	assert(config.spawnPoints and #config.spawnPoints > 0, "spawnPoints is required and must not be empty")
 	assert(config.damageService, "damageService is required")
@@ -55,6 +57,7 @@ function WaveManager.new(config)
 	
 	-- Required config
 	self.baseCoreHealth = config.baseCoreHealth
+	self.baseCorePart = config.baseCorePart
 	self.zombieTemplate = config.zombieTemplate
 	self.spawnPoints = config.spawnPoints
 	self.damageService = config.damageService
@@ -76,6 +79,7 @@ function WaveManager.new(config)
 	self.isRunning = false
 	self.activeZombies = {}
 	self.baseCoreDestroyed = false
+	self._runId = 0
 	
 	-- Connect to Base Core destruction
 	self.destroyedConnection = self.baseCoreHealth.Destroyed:Connect(function()
@@ -128,8 +132,8 @@ function WaveManager:SpawnZombie(wave)
 		humanoid.WalkSpeed = stats.speed
 	end
 	
-	-- Find base core part (assume it's the part the health is attached to)
-	local baseCorePart = self.baseCoreHealth.baseCorePart
+	-- Find base core part from config
+	local baseCorePart = self.baseCorePart
 	
 	-- Create ZombieAI
 	local zombieAI = ZombieAI.new(zombie, baseCorePart, {
@@ -142,15 +146,18 @@ function WaveManager:SpawnZombie(wave)
 	
 	zombieAI:Start()
 	
-	-- Track zombie
-	table.insert(self.activeZombies, {
+	-- Track zombie with death connection
+	local zombieData = {
 		model = zombie,
-		ai = zombieAI
-	})
+		ai = zombieAI,
+		diedConnection = nil
+	}
+	
+	table.insert(self.activeZombies, zombieData)
 	
 	-- Clean up when zombie dies
 	if humanoid then
-		humanoid.Died:Connect(function()
+		zombieData.diedConnection = humanoid.Died:Connect(function()
 			self:RemoveZombie(zombie)
 		end)
 	end
@@ -160,6 +167,11 @@ end
 function WaveManager:RemoveZombie(zombieModel)
 	for i, zombieData in ipairs(self.activeZombies) do
 		if zombieData.model == zombieModel then
+			-- Disconnect death connection
+			if zombieData.diedConnection then
+				zombieData.diedConnection:Disconnect()
+				zombieData.diedConnection = nil
+			end
 			-- Stop AI
 			if zombieData.ai then
 				zombieData.ai:Stop()
@@ -181,7 +193,7 @@ function WaveManager:AreAllZombiesDead()
 end
 
 -- Run a single wave
-function WaveManager:RunWave()
+function WaveManager:RunWave(runId)
 	self.currentWave = self.currentWave + 1
 	local wave = self.currentWave
 	
@@ -192,7 +204,7 @@ function WaveManager:RunWave()
 	
 	-- Spawn zombies one by one
 	for i = 1, zombieCount do
-		if not self.isRunning then break end
+		if not self.isRunning or runId ~= self._runId then break end
 		
 		self:SpawnZombie(wave)
 		
@@ -204,11 +216,11 @@ function WaveManager:RunWave()
 	print("[WaveManager] Spawned", zombieCount, "zombies for wave", wave)
 	
 	-- Wait for all zombies to die or game to stop
-	while self.isRunning and not self:AreAllZombiesDead() do
+	while self.isRunning and runId == self._runId and not self:AreAllZombiesDead() do
 		task.wait(1)
 	end
 	
-	if not self.isRunning then
+	if not self.isRunning or runId ~= self._runId then
 		return false -- Game stopped
 	end
 	
@@ -216,7 +228,13 @@ function WaveManager:RunWave()
 	
 	-- Wait between waves
 	print("[WaveManager] Next wave in", self.timeBetweenWaves, "seconds")
-	task.wait(self.timeBetweenWaves)
+	local waitStart = time()
+	while time() - waitStart < self.timeBetweenWaves do
+		if not self.isRunning or runId ~= self._runId then
+			return false
+		end
+		task.wait(0.5)
+	end
 	
 	return true -- Continue to next wave
 end
@@ -233,23 +251,27 @@ function WaveManager:Start()
 	self.isRunning = true
 	self.currentWave = 0
 	self.baseCoreDestroyed = false
+	self._runId = self._runId + 1
+	local runId = self._runId
 	
 	print("[WaveManager] Starting game loop")
 	
 	-- Run waves in a loop
 	task.spawn(function()
-		while self.isRunning do
-			local continue = self:RunWave()
+		while self.isRunning and runId == self._runId do
+			local continue = self:RunWave(runId)
 			if not continue then
 				break
 			end
 		end
 		
 		-- Game ended
-		if self.baseCoreDestroyed then
-			print("[WaveManager] Game Over - Base Core destroyed at wave", self.currentWave)
-		else
-			print("[WaveManager] Game stopped at wave", self.currentWave)
+		if runId == self._runId then
+			if self.baseCoreDestroyed then
+				print("[WaveManager] Game Over - Base Core destroyed at wave", self.currentWave)
+			else
+				print("[WaveManager] Game stopped at wave", self.currentWave)
+			end
 		end
 	end)
 end
@@ -265,9 +287,16 @@ function WaveManager:Stop()
 	
 	-- Stop and clean up all active zombies
 	for _, zombieData in ipairs(self.activeZombies) do
+		-- Disconnect death connection
+		if zombieData.diedConnection then
+			zombieData.diedConnection:Disconnect()
+			zombieData.diedConnection = nil
+		end
+		-- Stop AI
 		if zombieData.ai then
 			zombieData.ai:Stop()
 		end
+		-- Destroy model
 		if zombieData.model and zombieData.model.Parent then
 			zombieData.model:Destroy()
 		end
