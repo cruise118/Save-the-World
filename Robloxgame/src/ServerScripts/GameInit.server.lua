@@ -10,6 +10,7 @@ local Workspace = game:GetService("Workspace")
 local DamageService = require(ServerScriptService.Modules.DamageService)
 local BaseCoreHealth = require(ServerScriptService.Modules.BaseCoreHealth)
 local WaveManager = require(ServerScriptService.Modules.WaveManager)
+local StructureHealthService = require(ServerScriptService.Modules.StructureHealthService)
 
 -- Find required objects
 local baseCorePart = Workspace:FindFirstChild("BaseCore")
@@ -55,6 +56,19 @@ print("✓ Base Core Health initialized with", coreHealth:GetMaxHealth(), "HP")
 DamageService.RegisterBaseCore(baseCorePart, coreHealth)
 print("✓ Base Core registered with DamageService")
 
+-- Create structure health service
+local structureHealth = StructureHealthService.new({
+	defaultMaxHealth = 200,
+	destroyDelay = 0.05,
+	debug = true -- temporary for testing
+})
+
+-- Set structure damage handler
+DamageService.SetStructureDamageHandler(function(part, amount, source)
+	structureHealth:Damage(part, amount, source)
+end)
+print("✓ Structure Health Service initialized and connected to DamageService")
+
 -- Create wave manager
 local waveManager = WaveManager.new({
 	baseCoreHealth = coreHealth,
@@ -82,6 +96,9 @@ coreHealth.Destroyed:Connect(function()
 	
 	-- Stop wave manager
 	waveManager:Stop()
+	
+	-- Cleanup structure health service
+	structureHealth:Destroy()
 end)
 
 -- Start the game
