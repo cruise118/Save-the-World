@@ -32,7 +32,7 @@ local DEFAULT_CONFIG = {
 	
 	-- Movement
 	moveSpeed = 14, -- Slower than default player speed (16)
-	pathfindingUpdateInterval = 0.5, -- More frequent updates
+	pathfindingUpdateInterval = 1.0, -- Reduced for smoother movement
 	waypointReachedDistance = 3, -- Distance to consider waypoint reached
 	minWaypointAdvanceDistance = 3, -- Minimum distance to advance waypoint on path recalc
 	moveToUpdateThreshold = 1, -- Only update MoveTo if waypoint differs by this much
@@ -110,6 +110,7 @@ function ZombieAI.new(model, baseCore, config)
 	self.connections = {}
 	self.isActive = false
 	self._loopRunning = false
+	self._moveToFinishedConnection = nil -- Track MoveToFinished connection
 	
 	return self
 end
@@ -219,15 +220,7 @@ end
 	Idle state: Find a target and transition to move
 ]]
 function ZombieAI:UpdateIdle()
-	-- Check for nearby players first (highest priority)
-	local nearestPlayer = self:FindNearestPlayer()
-	if nearestPlayer then
-		self.currentTarget = nearestPlayer
-		self:SetState(State.MoveToTarget)
-		return
-	end
-	
-	-- Find nearest structure or use base core
+	-- Find nearest structure or use base core (player checks done in idle only for MVP)
 	local target, _ = self:FindNearestStructure()
 	if not target then
 		target = self.baseCore
@@ -241,58 +234,39 @@ end
 	Move state: Pathfind toward current target
 ]]
 function ZombieAI:UpdateMove()
-	-- Check for nearby players first (highest priority, overrides other targets)
-	local nearestPlayer = self:FindNearestPlayer()
-	if nearestPlayer then
-		-- Player detected, switch target if different
-		if self.currentTarget ~= nearestPlayer then
-			self.currentTarget = nearestPlayer
-			self.currentPath = nil -- Force path recalculation
-			self.lastTargetPosition = nil -- Clear for movement detection
-		end
-	else
-		-- No player nearby, check if we were targeting a player and need to switch
-		if self.currentTarget and self.currentTarget:IsA("Player") then
-			-- Player left range, switch to structure or base core
-			self.currentTarget = nil
-			self.currentPath = nil -- Force path recalculation
-			self.lastTargetPosition = nil -- Clear for movement detection
-		end
-		
-		-- Validate current target still exists
-		if not self.currentTarget or not self.currentTarget.Parent then
-			self.currentTarget = nil
-		end
-		
-		-- If no current target or it's a player (shouldn't be at this point), find structure
-		if not self.currentTarget then
-			local nearestStructure, _ = self:FindNearestStructure()
-			if nearestStructure then
-				self.currentTarget = nearestStructure
-			else
-				self.currentTarget = self.baseCore
-			end
-			self.currentPath = nil -- Force path recalculation
-			self.lastTargetPosition = nil -- Clear for movement detection
+	-- Validate current target still exists
+	if not self.currentTarget or not self.currentTarget.Parent then
+		self.currentTarget = nil
+	end
+	
+	-- If no current target, find structure or base core
+	if not self.currentTarget then
+		local nearestStructure, _ = self:FindNearestStructure()
+		if nearestStructure then
+			self.currentTarget = nearestStructure
 		else
-			-- We have a valid non-player target, check if we should switch to a closer structure
-			local nearestStructure, nearestDistance = self:FindNearestStructure()
-			if nearestStructure and nearestStructure ~= self.currentTarget then
-				-- Only switch if meaningfully closer (20% threshold to prevent jitter)
-				local targetPos = self:GetTargetPosition(self.currentTarget)
-				if targetPos then
-					local currentTargetDistance = (self.rootPart.Position - targetPos).Magnitude
-					if nearestDistance < currentTargetDistance * 0.8 then
-						self.currentTarget = nearestStructure
-						self.currentPath = nil -- Force path recalculation
-						self.lastTargetPosition = nil -- Clear for movement detection
-					end
+			self.currentTarget = self.baseCore
+		end
+		self.currentPath = nil -- Force path recalculation
+		self.lastTargetPosition = nil -- Clear for movement detection
+	else
+		-- We have a valid target, check if we should switch to a closer structure
+		local nearestStructure, nearestDistance = self:FindNearestStructure()
+		if nearestStructure and nearestStructure ~= self.currentTarget then
+			-- Only switch if meaningfully closer (20% threshold to prevent jitter)
+			local targetPos = self:GetTargetPosition(self.currentTarget)
+			if targetPos then
+				local currentTargetDistance = (self.rootPart.Position - targetPos).Magnitude
+				if nearestDistance < currentTargetDistance * 0.8 then
+					self.currentTarget = nearestStructure
+					self.currentPath = nil -- Force path recalculation
+					self.lastTargetPosition = nil -- Clear for movement detection
 				end
 			end
 		end
 	end
 	
-	-- Get current target position (handle players vs parts)
+	-- Get current target position
 	local targetPosition = self:GetTargetPosition(self.currentTarget)
 	if not targetPosition then
 		-- Target is invalid, go back to idle to find new target
@@ -333,71 +307,23 @@ function ZombieAI:UpdateMove()
 		self.lastStuckCheckPosition = self.rootPart.Position
 	end
 	
-	-- Fallback: periodic recalculation
-	if not needsRecalc and (currentTime - self.lastPathUpdateTime) >= self.config.pathfindingUpdateInterval then
-		needsRecalc = true
-	end
-	
 	-- Recalculate path if needed
 	if needsRecalc then
 		self:CalculatePath(targetPosition)
 		self.lastPathUpdateTime = currentTime
 		self.lastTargetPosition = targetPosition
+		-- Immediately issue MoveTo after path recalculation
+		self:IssueMoveToCurrentWaypoint()
 	end
 	
-	-- Follow path
-	if self.currentPath and self.currentWaypoint <= #self.currentPath then
-		local waypoint = self.currentPath[self.currentWaypoint]
-		
-		-- Only issue MoveTo if waypoint changed or position differs significantly
-		local shouldMoveTo = false
-		if not self._lastMoveToPosition then
-			shouldMoveTo = true
-		elseif (self._lastMoveToPosition - waypoint).Magnitude > self.config.moveToUpdateThreshold then
-			shouldMoveTo = true
-		end
-		
-		if shouldMoveTo then
-			self.humanoid:MoveTo(waypoint)
-			self._lastMoveToPosition = waypoint
-		end
-		
-		-- Check if reached waypoint
-		local distanceToWaypoint = (self.rootPart.Position - waypoint).Magnitude
-		if distanceToWaypoint < self.config.waypointReachedDistance then
-			self.currentWaypoint = self.currentWaypoint + 1
-		end
-	else
-		-- No valid path, move directly toward target
-		local shouldMoveTo = false
-		if not self._lastMoveToPosition then
-			shouldMoveTo = true
-		elseif (self._lastMoveToPosition - targetPosition).Magnitude > self.config.moveToUpdateThreshold then
-			shouldMoveTo = true
-		end
-		
-		if shouldMoveTo then
-			self.humanoid:MoveTo(targetPosition)
-			self._lastMoveToPosition = targetPosition
-		end
-	end
+	-- Follow path using event-driven waypoint progression (handled by MoveToFinished)
+	-- This Update function only handles path recalculation logic
 end
 
 --[[
 	Attack state: Damage target at intervals
 ]]
 function ZombieAI:UpdateAttack()
-	-- Check if we're attacking a player and they've left detection range entirely
-	if self.currentTarget and self.currentTarget:IsA("Player") then
-		local playerInRange = self:FindNearestPlayer()
-		if not playerInRange or playerInRange ~= self.currentTarget then
-			-- Player left range, go back to idle to find new target
-			self.currentTarget = nil
-			self:SetState(State.Idle)
-			return
-		end
-	end
-	
 	-- Get current target position
 	local targetPosition = self:GetTargetPosition(self.currentTarget)
 	if not targetPosition then
@@ -582,14 +508,31 @@ function ZombieAI:CalculatePath(targetPosition)
 			
 			self.currentPath = newPath
 			self.currentWaypoint = startIndex
+			self._lastMoveToPosition = nil -- Clear to force immediate MoveTo
 		else
 			self.currentPath = nil
+			self._lastMoveToPosition = nil
 		end
 	else
 		-- Path failed, clear path and move directly
 		self.currentPath = nil
 		self.currentWaypoint = 1
+		self._lastMoveToPosition = nil
 	end
+end
+
+--[[
+	Issues a MoveTo command to the current waypoint
+	Helper function to avoid code duplication
+]]
+function ZombieAI:IssueMoveToCurrentWaypoint()
+	if not self.currentPath or self.currentWaypoint > #self.currentPath then
+		return
+	end
+	
+	local waypoint = self.currentPath[self.currentWaypoint]
+	self.humanoid:MoveTo(waypoint)
+	self._lastMoveToPosition = waypoint
 end
 
 --[[
@@ -602,14 +545,36 @@ function ZombieAI:SetState(newState)
 	
 	-- State exit logic
 	if self.state == State.MoveToTarget then
-		self.humanoid:MoveTo(self.rootPart.Position) -- Stop moving
+		-- Disconnect MoveToFinished connection
+		if self._moveToFinishedConnection then
+			self._moveToFinishedConnection:Disconnect()
+			self._moveToFinishedConnection = nil
+		end
 	end
 	
 	self.state = newState
 	
 	-- State enter logic
-	if newState == State.Dead then
-		self.humanoid:MoveTo(self.rootPart.Position)
+	if newState == State.MoveToTarget then
+		-- Connect to MoveToFinished for event-driven waypoint progression
+		self._moveToFinishedConnection = self.humanoid.MoveToFinished:Connect(function(reached)
+			if self.state == State.MoveToTarget and reached then
+				-- Advance to next waypoint
+				self.currentWaypoint = self.currentWaypoint + 1
+				-- Immediately issue MoveTo to next waypoint
+				self:IssueMoveToCurrentWaypoint()
+			end
+		end)
+	elseif newState == State.Dead then
+		-- Stop movement on death
+		if self.humanoid.Parent and self.rootPart.Parent then
+			self.humanoid:MoveTo(self.rootPart.Position)
+		end
+	elseif newState == State.Attack then
+		-- Stop movement when entering attack
+		if self.humanoid.Parent and self.rootPart.Parent then
+			self.humanoid:MoveTo(self.rootPart.Position)
+		end
 	end
 end
 
