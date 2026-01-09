@@ -92,4 +92,28 @@ function StructureSpawner.SpawnFloor(position: Vector3, orientationY: number?): 
 	return floor
 end
 
+-- Spawn a spike trap (does not take damage, just triggers on touch)
+function StructureSpawner.SpawnSpikeTrap(position: Vector3, orientationY: number?): Part
+	assert(RunService:IsServer(), "StructureSpawner must run on the server")
+	assert(typeof(position) == "Vector3", "position must be a Vector3")
+	
+	local trap = Instance.new("Part")
+	trap.Name = "SpikeTrap"
+	trap.Size = Vector3.new(6, 0.5, 6)
+	trap.Position = position
+	trap.Anchored = true
+	trap.CanCollide = false -- Zombies can walk over it
+	trap.Material = Enum.Material.Metal
+	trap.Color = Color3.fromRGB(180, 50, 50) -- Reddish for danger
+	
+	if orientationY then
+		trap.Orientation = Vector3.new(0, orientationY, 0)
+	end
+	
+	-- Parent to workspace (traps don't need structure tag, they're managed by TrapService)
+	trap.Parent = GetStructuresFolder()
+	
+	return trap
+end
+
 return StructureSpawner

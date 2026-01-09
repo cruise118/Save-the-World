@@ -13,10 +13,12 @@ local BaseCoreHealth = require(ServerScriptService.Modules.BaseCoreHealth)
 local WaveManager = require(ServerScriptService.Modules.WaveManager)
 local StructureHealthService = require(ServerScriptService.Modules.StructureHealthService)
 local StructureSpawner = require(ServerScriptService.Modules.StructureSpawner)
+local TrapService = require(ServerScriptService.Modules.TrapService)
 
 -- Game state
 local coreHealth = nil
 local structureHealth = nil
+local trapService = nil
 local waveManager = nil
 local gameOverConn = nil
 
@@ -58,6 +60,12 @@ local function StopRun()
 	if waveManager then
 		waveManager:Stop()
 		waveManager = nil
+	end
+	
+	-- Cleanup trap service
+	if trapService then
+		trapService:Destroy()
+		trapService = nil
 	end
 	
 	-- Cleanup structure health
@@ -111,6 +119,14 @@ local function StartRun()
 		structureHealth:Damage(part, amount, source)
 	end)
 	print("✓ Structure Health Service initialized and connected to DamageService")
+	
+	-- Create trap service
+	trapService = TrapService.new({
+		spikeDamage = 15,
+		hitCooldown = 0.75,
+		debug = true -- temporary for testing
+	})
+	print("✓ Trap Service initialized")
 	
 	-- Create wave manager
 	waveManager = WaveManager.new({
@@ -217,12 +233,42 @@ Players.PlayerAdded:Connect(function(player)
 				-- Toggle rotation between 0 and 90 degrees
 				rotationY = (rotationY == 0) and 90 or 0
 				print("✓ Rotation set to", rotationY, "degrees for next spawns")
+				
+			elseif message == "!trap" then
+				-- Spawn a spike trap in front of the player
+				local character = player.Character
+				if not character then
+					print("⚠ Cannot spawn trap: character not found")
+					return
+				end
+				
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp then
+					print("⚠ Cannot spawn trap: HumanoidRootPart not found")
+					return
+				end
+				
+				-- Position 8 studs in front of player
+				local lookVector = hrp.CFrame.LookVector
+				local spawnPosition = hrp.Position + (lookVector * 8)
+				-- Align to ground
+				spawnPosition = Vector3.new(spawnPosition.X, 0.25, spawnPosition.Z)
+				
+				local trap = StructureSpawner.SpawnSpikeTrap(spawnPosition, rotationY)
+				-- Register with trap service
+				if trapService then
+					trapService:RegisterSpikeTrap(trap)
+					print("✓ Spawned spike trap at", spawnPosition)
+				else
+					print("⚠ Trap service not initialized")
+				end
 			end
 		end)
 		print("✓ Testing commands enabled:")
 		print("  - Type '!restart' to restart the game")
 		print("  - Type '!wall' to spawn a wall in front of you")
 		print("  - Type '!floor' to spawn a floor at your position")
+		print("  - Type '!trap' to spawn a spike trap in front of you")
 		print("  - Type '!rot90' to toggle rotation (0° or 90°)")
 	end
 end)
