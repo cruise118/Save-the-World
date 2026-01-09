@@ -222,6 +222,12 @@ local function UpdateGhostPosition()
 			local snappedPos = SnapToGrid(hitPos)
 			buildMode.ghost.Position = Vector3.new(snappedPos.X, 0.5 + config.size.Y / 2, snappedPos.Z)
 			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
+			
+		elseif config.type == "ceiling" then
+			-- Ceiling: grid snapping at 8 studs height
+			local snappedPos = SnapToGrid(hitPos)
+			buildMode.ghost.Position = Vector3.new(snappedPos.X, 8, snappedPos.Z)
+			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
 		end
 		
 		-- Check if within build distance (only update color if not already red)
@@ -240,9 +246,9 @@ local function UpdateGhostPosition()
 	end
 end
 
--- Select a build slot (1-3)
+-- Select a build slot (1-5)
 local function SelectSlot(slotNumber)
-	if slotNumber < 1 or slotNumber > 3 then
+	if slotNumber < 1 or slotNumber > 5 then
 		return
 	end
 	
