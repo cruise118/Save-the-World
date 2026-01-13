@@ -110,15 +110,14 @@ function BuildPlacementService:RemoveStructure(gridX, gridZ, level, structureTyp
 	self._gridService:RemoveStructure(gridX, gridZ, level, structureType)
 	
 	-- Calculate cascade destruction
-	local cascadeDestroyIds = self._supportService:CalculateCascadeDestruction(metadata.Id)
+	local cascadeDestroyList = self._supportService:CalculateCascadeDestruction(metadata.Id)
 	
 	-- Remove cascaded structures from grid
 	local cascadeDestroyedStructures = {}
-	for _, structureId in ipairs(cascadeDestroyIds) do
-		-- Find and remove the structure from grid
-		local depInfo = self._supportService:GetDependencyInfo(structureId)
-		if depInfo and depInfo.metadata then
-			local meta = depInfo.metadata
+	for _, cascadeData in ipairs(cascadeDestroyList) do
+		-- cascadeData now contains {id = structureId, metadata = structureMetadata}
+		local meta = cascadeData.metadata
+		if meta then
 			self._gridService:RemoveStructure(meta.GridX, meta.GridZ, meta.Level, meta.Type)
 			table.insert(cascadeDestroyedStructures, meta)
 		end

@@ -5,6 +5,9 @@
 
 local BuildConfig = require(script.Parent.BuildConfig)
 
+-- Seed random number generator for better ID generation
+math.randomseed(os.time())
+
 local BuildPieceFactory = {}
 BuildPieceFactory.__index = BuildPieceFactory
 

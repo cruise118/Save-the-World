@@ -191,7 +191,7 @@ function BuildSupportService:CalculateCascadeDestruction(removedStructureId)
 			
 			-- If no support, mark for destruction and check dependents
 			if not hasSupport then
-				toDestroy[currentId] = true
+				toDestroy[currentId] = depData -- Store full depData, not just true
 				
 				-- Add structures supported by this one to queue
 				for _, supportedId in ipairs(depData.supporting) do
@@ -203,10 +203,13 @@ function BuildSupportService:CalculateCascadeDestruction(removedStructureId)
 		end
 	end
 	
-	-- Convert to array
+	-- Convert to array with metadata preserved
 	local destructionList = {}
-	for structureId, _ in pairs(toDestroy) do
-		table.insert(destructionList, structureId)
+	for structureId, depData in pairs(toDestroy) do
+		table.insert(destructionList, {
+			id = structureId,
+			metadata = depData.metadata
+		})
 		self:UnregisterStructure(structureId)
 	end
 	
