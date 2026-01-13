@@ -63,7 +63,7 @@ local floorRecord = {
 	hp = 100,
 	tier = "MVP"
 }
-BuildGridService.AddStructure(floorRecord)
+gridService:AddStructure(floorRecord)
 print("Placed floor at (5,5,0)")
 
 -- Try to place another floor in same slot (should fail)
@@ -81,7 +81,7 @@ local wallRecord = {
 	hp = 100,
 	tier = "MVP"
 }
-BuildGridService.AddStructure(wallRecord)
+gridService:AddStructure(wallRecord)
 print("Placed wall at (3,3,0,S)")
 
 -- Try to place another wall on same edge (should fail)
@@ -103,7 +103,7 @@ local rampRecord = {
 	hp = 100,
 	tier = "MVP"
 }
-BuildGridService.AddStructure(rampRecord)
+gridService:AddStructure(rampRecord)
 print("Placed ramp at (7,7,0,0°)")
 
 -- Try to place another ramp with same rotation (should fail)
