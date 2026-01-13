@@ -127,7 +127,7 @@ function BuildPieceFactory:CreateWall(x, z, level, edge)
 	-- Create part
 	local wall = Instance.new("Part")
 	wall.Name = string.format("Wall_%d_%d_%d_%s", x, z, level, edge)
-	wall.Size = Vector3.new(TILE_SIZE, WALL_HEIGHT, 1)
+	wall.Size = Vector3.new(TILE_SIZE, WALL_HEIGHT, TILE_SIZE)  -- Same footprint as floor (12x8x12)
 	wall.Position = wallPos
 	wall.Anchored = true
 	wall.CanCollide = true
@@ -185,11 +185,11 @@ function BuildPieceFactory:CreateRamp(x, z, level, rotation)
 	-- Convert to world position
 	local worldPos = self.gridService:GridToWorld(x, z, level)
 	
-	-- Create wedge part for ramp
+	-- Create wedge part for ramp (same footprint as floor: 12x8x12)
 	local ramp = Instance.new("WedgePart")
 	ramp.Name = string.format("Ramp_%d_%d_%d_R%d", x, z, level, rotation)
-	ramp.Size = Vector3.new(TILE_SIZE, WALL_HEIGHT, TILE_SIZE)
-	ramp.Position = worldPos + Vector3.new(0, WALL_HEIGHT / 2, 0)  -- Center at mid-height
+	ramp.Size = Vector3.new(TILE_SIZE, WALL_HEIGHT, TILE_SIZE)  -- Width x Height x Depth (12x8x12)
+	ramp.Position = worldPos + Vector3.new(0, WALL_HEIGHT / 2, 0)  -- Center vertically
 	ramp.Anchored = true
 	ramp.CanCollide = true
 	ramp.Material = Enum.Material.SmoothPlastic
