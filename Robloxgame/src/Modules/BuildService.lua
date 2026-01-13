@@ -132,7 +132,7 @@ local level = self.gridService:WorldYToLevel(worldPosition.Y)
 print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
 
 -- Determine which edge of the tile we're closest to
-local edge = self.gridService:DetermineWallEdge(worldPosition, x, z)
+local edge = self.gridService:DetermineWallEdge(x, z, worldPosition)
 print(string.format("[BuildService] Determined Edge: %s", edge))
 
 -- Validate build distance
