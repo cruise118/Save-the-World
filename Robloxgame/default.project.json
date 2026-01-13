@@ -9,10 +9,16 @@
         "$className": "Folder",
         "BuildGridService": {
           "$path": "src/Modules/BuildGridService.lua"
+        },
+        "BuildPlacementService": {
+          "$path": "src/Modules/BuildPlacementService.lua"
         }
       },
       "TestBuildGrid": {
         "$path": "src/ServerScripts/TestBuildGrid.server.lua"
+      },
+      "TestBuildPlacement": {
+        "$path": "src/ServerScripts/TestBuildPlacement.server.lua"
       }
     }
   }
