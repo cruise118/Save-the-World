@@ -30,6 +30,21 @@
         },
         "BuildService": {
           "$path": "src/Modules/BuildService.lua"
+        },
+        "BuildGridService": {
+          "$path": "src/Modules/BuildGridService.lua"
+        },
+        "BuildSupportService": {
+          "$path": "src/Modules/BuildSupportService.lua"
+        },
+        "TerrainSupportService": {
+          "$path": "src/Modules/TerrainSupportService.lua"
+        },
+        "BuildPlacementService": {
+          "$path": "src/Modules/BuildPlacementService.lua"
+        },
+        "BuildPieceFactory": {
+          "$path": "src/Modules/BuildPieceFactory.lua"
         }
       },
       "GameInit": {
