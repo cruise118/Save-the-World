@@ -89,7 +89,7 @@ function BuildSupportService:_updateDependencies(metadata)
 	if level == 0 then
 		-- Supported by terrain
 		if self._gridService:HasTerrainSupport(gridX, gridZ, level) then
-			self._dependencies[metadata.Id].supportedBy = {"terrain"}
+			self._dependencies[metadata.Id].supportedBy = {BuildConfig.TerrainSupportId}
 		end
 	else
 		local supporters = {}
@@ -183,7 +183,7 @@ function BuildSupportService:CalculateCascadeDestruction(removedStructureId)
 			
 			-- Check if structure still has support
 			for _, supporterId in ipairs(depData.supportedBy) do
-				if supporterId == "terrain" or (self._dependencies[supporterId] and not toDestroy[supporterId]) then
+				if supporterId == BuildConfig.TerrainSupportId or (self._dependencies[supporterId] and not toDestroy[supporterId]) then
 					hasSupport = true
 					break
 				end

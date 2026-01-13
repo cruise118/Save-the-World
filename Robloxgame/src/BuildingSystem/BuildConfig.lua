@@ -42,6 +42,9 @@ BuildConfig.MaterialTier = {
 -- Default material
 BuildConfig.DefaultMaterial = "Wood"
 
+-- Support system constants
+BuildConfig.TerrainSupportId = "terrain"
+
 -- Validation error messages
 BuildConfig.ValidationErrors = {
 	Unsupported = "Structure must be supported (no floating builds allowed)",

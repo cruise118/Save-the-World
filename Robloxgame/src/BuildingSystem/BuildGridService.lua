@@ -64,14 +64,6 @@ function BuildGridService:IsTileOccupied(gridX, gridZ, level, structureType)
 	return self._grid[key] ~= nil
 end
 
--- Check for wall on edge between two tiles
-function BuildGridService:IsWallOnEdge(gridX, gridZ, level, direction)
-	-- Direction: "North", "South", "East", "West"
-	-- Walls are stored at the tile they're adjacent to with specific direction
-	local key = self:_generateKey(gridX, gridZ, level, BuildConfig.StructureType.Wall .. "_" .. direction)
-	return self._grid[key] ~= nil
-end
-
 -- Mark tile as occupied
 function BuildGridService:OccupyTile(gridX, gridZ, level, structureType, metadata)
 	local key = self:_generateKey(gridX, gridZ, level, structureType)

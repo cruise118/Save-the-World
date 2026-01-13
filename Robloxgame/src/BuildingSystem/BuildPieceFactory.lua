@@ -65,8 +65,10 @@ function BuildPieceFactory:CreateStructureMetadata(structureType, gridX, gridZ, 
 		error("Invalid material: " .. tostring(material))
 	end
 	
-	-- Generate unique ID for this structure
-	local structureId = string.format("%s_%d_%d_%d_%d", structureType, gridX, gridZ, level, os.time())
+	-- Generate unique ID for this structure with high entropy
+	-- Combines: type, position, level, timestamp, and random number to avoid collisions
+	local structureId = string.format("%s_%d_%d_%d_%d_%d", 
+		structureType, gridX, gridZ, level, os.time(), math.random(1000000, 9999999))
 	
 	return {
 		-- Identity
