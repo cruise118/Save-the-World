@@ -15,16 +15,7 @@ local WaveManager = require(ServerScriptService.Modules.WaveManager)
 local StructureHealthService = require(ServerScriptService.Modules.StructureHealthService)
 local StructureSpawner = require(ServerScriptService.Modules.StructureSpawner)
 local TrapService = require(ServerScriptService.Modules.TrapService)
-
--- NEW FORTNITE-STYLE BUILDING SYSTEM MODULES
-local BuildGridService = require(ServerScriptService.Modules.BuildGridService)
-local BuildSupportService = require(ServerScriptService.Modules.BuildSupportService)
-local TerrainSupportService = require(ServerScriptService.Modules.TerrainSupportService)
-local BuildPlacementService = require(ServerScriptService.Modules.BuildPlacementService)
-local BuildPieceFactory = require(ServerScriptService.Modules.BuildPieceFactory)
 local BuildService = require(ServerScriptService.Modules.BuildService)
-
-print("✓✓✓ FORTNITE-STYLE BUILDING SYSTEM MODULES LOADED ✓✓✓")
 
 -- Game state
 local coreHealth = nil
@@ -33,13 +24,6 @@ local trapService = nil
 local waveManager = nil
 local buildService = nil
 local gameOverConn = nil
-
--- NEW: Building system services
-local gridService = nil
-local supportService = nil
-local terrainService = nil
-local placementService = nil
-local factoryService = nil
 
 -- Find required objects (once)
 local baseCorePart = Workspace:FindFirstChild("BaseCore")
@@ -81,34 +65,10 @@ local function StopRun()
 		waveManager = nil
 	end
 	
-	-- Cleanup build service (MUST BE BEFORE factory to prevent double cleanup)
+	-- Cleanup build service
 	if buildService then
 		buildService:Destroy()
 		buildService = nil
-	end
-	
-	-- Cleanup building system services
-	if factoryService then
-		factoryService:Destroy()
-		factoryService = nil
-	end
-	
-	if supportService then
-		supportService:Destroy()
-		supportService = nil
-	end
-	
-	if placementService then
-		placementService = nil
-	end
-	
-	if gridService then
-		gridService:Destroy()
-		gridService = nil
-	end
-	
-	if terrainService then
-		terrainService = nil
 	end
 	
 	-- Cleanup trap service
@@ -177,47 +137,13 @@ local function StartRun()
 	})
 	print("✓ Trap Service initialized")
 	
-	print("═══════════════════════════════════════")
-	print("  INITIALIZING FORTNITE-STYLE BUILDING SYSTEM")
-	print("═══════════════════════════════════════")
-	
-	-- Create building system services IN CORRECT ORDER
-	-- 1. Grid Service (foundation)
-	gridService = BuildGridService.new()
-	print("✓ BuildGridService initialized")
-	
-	-- 2. Terrain Service (support abstraction)
-	terrainService = TerrainSupportService.new()
-	print("✓ TerrainSupportService initialized")
-	
-	-- 3. Support Service (structural validation)
-	supportService = BuildSupportService.new(gridService, terrainService)
-	print("✓ BuildSupportService initialized")
-	
-	-- 4. Placement Service (validation logic)
-	placementService = BuildPlacementService.new(gridService, supportService, terrainService)
-	print("✓ BuildPlacementService initialized")
-	
-	-- 5. Factory Service (spawning)
-	factoryService = BuildPieceFactory.new(gridService)
-	print("✓ BuildPieceFactory initialized")
-	
-	-- 6. Build Service (orchestrator - receives all services)
-	buildService = BuildService.new(
-		gridService,
-		supportService,
-		terrainService,
-		placementService,
-		factoryService,
-		{
-			maxBuildDistance = 50,
-			debug = true  -- Enable extensive logging
-		}
-	)
-	print("✓ BuildService initialized with all dependencies")
-	print("═══════════════════════════════════════")
-	print("  FORTNITE-STYLE BUILDING SYSTEM READY")
-	print("═══════════════════════════════════════")
+	-- Create build service
+	buildService = BuildService.new({
+		maxBuildDistance = 50,
+		debug = false
+	})
+	buildService:SetTrapService(trapService)
+	print("✓ Build Service initialized")
 	
 	-- Create wave manager
 	waveManager = WaveManager.new({
@@ -289,21 +215,15 @@ print("✓ Created BuildRemotes in ReplicatedStorage")
 -- Handle structure placement
 placeStructureRemote.OnServerEvent:Connect(function(player, structureType, position, rotation)
 	if not buildService then
-		warn("[GameInit] BuildService not initialized")
+		warn("[BuildService] Service not initialized")
 		return
 	end
 	
 	-- Validate inputs
 	if typeof(structureType) ~= "string" or typeof(position) ~= "Vector3" or typeof(rotation) ~= "number" then
-		warn("[GameInit] Invalid parameters from", player.Name)
+		warn("[BuildService] Invalid parameters from", player.Name)
 		return
 	end
-	
-	print(string.format("[GameInit] ======== STRUCTURE PLACEMENT REQUEST ========"))
-	print(string.format("[GameInit] Player: %s", player.Name))
-	print(string.format("[GameInit] Type: %s", structureType))
-	print(string.format("[GameInit] Position: (%.1f, %.1f, %.1f)", position.X, position.Y, position.Z))
-	print(string.format("[GameInit] Rotation: %d", rotation))
 	
 	local success, part, err
 	
@@ -311,43 +231,44 @@ placeStructureRemote.OnServerEvent:Connect(function(player, structureType, posit
 		success, part, err = buildService:PlaceFloor(player, position, rotation)
 	elseif structureType == "wall" then
 		success, part, err = buildService:PlaceWall(player, position, rotation)
+	elseif structureType == "trap" then
+		-- Find floor at position
+		local floor = buildService:GetFloorAtPosition(position)
+		if floor then
+			success, part, err = buildService:PlaceFloorTrap(player, floor, "spike")
+		else
+			success, part, err = false, nil, "No floor found at this location"
+		end
 	elseif structureType == "ramp" then
 		success, part, err = buildService:PlaceRamp(player, position, rotation)
-	-- NOTE: ceiling and trap removed - trap will be redesigned separately
+	elseif structureType == "ceiling" then
+		success, part, err = buildService:PlaceCeiling(player, position, rotation)
 	else
-		warn("[GameInit] Unknown structure type:", structureType)
+		warn("[BuildService] Unknown structure type:", structureType)
 		return
 	end
 	
 	if not success then
-		warn("[GameInit] ✗ PLACEMENT FAILED:", err)
-	else
-		print("[GameInit] ✓ PLACEMENT SUCCESS")
+		warn("[BuildService]", player.Name, "failed to place", structureType .. ":", err)
 	end
 end)
 
 -- Handle structure deletion
 deleteStructureRemote.OnServerEvent:Connect(function(player, part)
 	if not buildService then
-		warn("[GameInit] BuildService not initialized")
+		warn("[BuildService] Service not initialized")
 		return
 	end
 	
 	if typeof(part) ~= "Instance" or not part:IsA("BasePart") then
-		warn("[GameInit] Invalid part from", player.Name)
+		warn("[BuildService] Invalid part from", player.Name)
 		return
 	end
-	
-	print(string.format("[GameInit] ======== DELETE REQUEST ========"))
-	print(string.format("[GameInit] Player: %s", player.Name))
-	print(string.format("[GameInit] Part: %s", part.Name))
 	
 	local success, err = buildService:DeleteStructure(player, part)
 	
 	if not success then
-		warn("[GameInit] ✗ DELETE FAILED:", err)
-	else
-		print("[GameInit] ✓ DELETE SUCCESS")
+		warn("[BuildService]", player.Name, "failed to delete structure:", err)
 	end
 end)
 
@@ -367,18 +288,13 @@ local firstPlayer = nil
 Players.PlayerAdded:Connect(function(player)
 	if #Players:GetPlayers() == 1 then
 		firstPlayer = player
-		print("✓✓✓ FORTNITE-STYLE BUILDING SYSTEM ENABLED ✓✓✓")
+		print("✓ Building system enabled for all players")
 		print("✓ Restart command enabled for", player.Name)
-		print("═══════════════════════════════════════")
-		print("  CONTROLS:")
-		print("  - Use hotbar at bottom: Floor (1), Wall (2), Ramp (3)")
-		print("  - R to rotate placement")
-		print("  - Q/E to change build level (vertical stacking)")
-		print("  - Left click to place")
-		print("  - Delete button (trash icon) to remove structures")
-		print("  - ESC to cancel build mode")
+		print("  - Use the hotbar at the bottom of the screen to build")
+		print("  - Press 1, 2, 3 for Floor, Wall, Trap")
+		print("  - Press R to rotate placement")
+		print("  - Click delete button to remove structures")
 		print("  - Type '!restart' to restart the game")
-		print("═══════════════════════════════════════")
 	end
 end)
 

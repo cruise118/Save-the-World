@@ -1,7 +1,13 @@
 --[[
-	BuildClient.client.lua
-	Client-side building system with ghost preview
-	Handles input, ghost visualization, and communicates with server
+BuildClient.client.lua - COMPLETELY REFACTORED FOR FORTNITE-STYLE 3-SLOT SYSTEM
+Client-side building with grid/level placement, ghost preview, validation feedback
+
+New Architecture:
+- Only 3 build pieces: Floor, Wall, Ramp (NO CEILING, NO TRAP in hotbar)
+- Level-based vertical placement (shift+scroll or keybind to change level)
+- Ghost preview shows valid/invalid colors
+- Grid snapping with proper tile/edge positioning
+- Communicates with new BuildService API
 --]]
 
 local Players = game:GetService("Players")
@@ -17,368 +23,301 @@ local buildRemotes = ReplicatedStorage:WaitForChild("BuildRemotes")
 local PlaceStructureRemote = buildRemotes:WaitForChild("PlaceStructure")
 local DeleteStructureRemote = buildRemotes:WaitForChild("DeleteStructure")
 
--- Wait for BuildEvents
+-- Wait for BuildEvents (communication with BuildUI)
 local buildEvents = ReplicatedStorage:WaitForChild("BuildEvents")
 local slotSelected = buildEvents:WaitForChild("SlotSelected")
 local slotDeselected = buildEvents:WaitForChild("SlotDeselected")
-local selectSlotRemote = buildEvents:WaitForChild("SelectSlot")
-local deselectSlotRemote = buildEvents:WaitForChild("DeselectSlot")
-
--- Build mode state
-local buildMode = {
-	active = false,
-	selectedSlot = nil,  -- 1-5 = floor, wall, trap, ramp, ceiling
-	rotation = 0,  -- Current rotation angle
-	ghost = nil,  -- Current ghost preview part
-	maxDistance = 50,  -- Max build distance
-}
 
 -- Constants
 local TILE_SIZE = 12
+local WALL_HEIGHT = 8
+local LEVEL_HEIGHT = 8
 local ROTATION_INCREMENT = 90
+local MAX_BUILD_DISTANCE = 50
 
--- Slot configuration
-local SLOT_CONFIG = {
-	[1] = { type = "floor", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(120, 120, 120), name = "Floor" },
-	[2] = { type = "wall", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(150, 150, 150), name = "Wall" },
-	[3] = { type = "trap", size = Vector3.new(11.8, 0.5, 11.8), color = Color3.fromRGB(180, 50, 50), name = "Spike Trap" },
-	[4] = { type = "ramp", size = Vector3.new(12, 8, 12), color = Color3.fromRGB(130, 130, 100), name = "Ramp" },
-	[5] = { type = "ceiling", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(140, 140, 140), name = "Ceiling" },
+-- Build mode state
+local buildMode = {
+active = false,
+selectedSlot = nil,  -- 1=floor, 2=wall, 3=ramp
+currentLevel = 0,    -- Current build level (0 = ground)
+rotation = 0,        -- Current rotation (0, 90, 180, 270)
+ghost = nil,         -- Ghost preview part
+deleteMode = false,  -- Delete mode flag
 }
 
--- Snap position to grid
-local function SnapToGrid(position)
-	local x = math.floor((position.X / TILE_SIZE) + 0.5) * TILE_SIZE
-	local z = math.floor((position.Z / TILE_SIZE) + 0.5) * TILE_SIZE
-	return Vector3.new(x, 0.5, z)
+-- Slot configuration (3 slots only)
+local SLOT_CONFIG = {
+[1] = { type = "floor", size = Vector3.new(12, 1, 12), color = Color3.fromRGB(120, 200, 120), name = "Floor" },
+[2] = { type = "wall", size = Vector3.new(12, 8, 1), color = Color3.fromRGB(200, 200, 120), name = "Wall" },
+[3] = { type = "ramp", size = Vector3.new(12, 8, 12), color = Color3.fromRGB(150, 130, 100), name = "Ramp" },
+}
+
+print("[BuildClient] ✓✓✓ INITIALIZED - FORTNITE-STYLE 3-SLOT SYSTEM ✓✓✓")
+print("[BuildClient] - 3 Build Pieces: Floor, Wall, Ramp")
+print("[BuildClient] - Level-based placement (Q/E to change level)")
+print("[BuildClient] - Grid snapping with validation")
+
+-- Convert world position to grid coordinates
+local function WorldToGrid(worldPos)
+local x = math.floor((worldPos.X / TILE_SIZE) + 0.5) * TILE_SIZE
+local z = math.floor((worldPos.Z / TILE_SIZE) + 0.5) * TILE_SIZE
+local level = buildMode.currentLevel
+local y = 0.5 + (level * LEVEL_HEIGHT)
+return Vector3.new(x, y, z), x, z, level
+end
+
+-- Determine which edge of a tile we're closest to (for walls)
+local function DetermineWallEdge(worldPos, gridX, gridZ)
+local tileCenter = Vector3.new(gridX, 0, gridZ)
+local relative = worldPos - tileCenter
+
+-- Determine which edge is closest
+local absX = math.abs(relative.X)
+local absZ = math.abs(relative.Z)
+
+if absX > absZ then
+-- Closer to X edges
+if relative.X > 0 then
+return "east", Vector3.new(gridX + TILE_SIZE/2, 0, gridZ), 90
+else
+return "west", Vector3.new(gridX - TILE_SIZE/2, 0, gridZ), 270
+end
+else
+-- Closer to Z edges
+if relative.Z > 0 then
+return "north", Vector3.new(gridX, 0, gridZ + TILE_SIZE/2), 0
+else
+return "south", Vector3.new(gridX, 0, gridZ - TILE_SIZE/2), 180
+end
+end
 end
 
 -- Create or update ghost preview
 local function UpdateGhost()
-	-- Remove old ghost
-	if buildMode.ghost then
-		buildMode.ghost:Destroy()
-		buildMode.ghost = nil
-	end
-	
-	if not buildMode.active or not buildMode.selectedSlot then
-		return
-	end
-	
-	local config = SLOT_CONFIG[buildMode.selectedSlot]
-	if not config then
-		return
-	end
-	
-	-- Create ghost based on structure type
-	local ghost
-	
-	if config.type == "ramp" then
-		-- Ramps use WedgeParts
-		ghost = Instance.new("WedgePart")
-		ghost.Name = "BuildGhost"
-		ghost.Size = config.size
-		ghost.Anchored = true
-		ghost.CanCollide = false
-		ghost.Transparency = 0.5
-		ghost.Material = Enum.Material.SmoothPlastic
-		ghost.Color = config.color
-		ghost.Parent = workspace
-	else
-		-- Regular structures (floor, wall, trap, ceiling)
-		ghost = Instance.new("Part")
-		ghost.Name = "BuildGhost"
-		ghost.Size = config.size
-		ghost.Anchored = true
-		ghost.CanCollide = false
-		ghost.Transparency = 0.5
-		ghost.Material = Enum.Material.SmoothPlastic
-		ghost.Color = config.color
-		ghost.Parent = workspace
-	end
-	
-	buildMode.ghost = ghost
+-- Remove old ghost
+if buildMode.ghost then
+buildMode.ghost:Destroy()
+buildMode.ghost = nil
 end
 
--- Find closest floor to position (for wall placement)
-local function FindClosestFloor(position)
-	local structuresFolder = workspace:FindFirstChild("Structures")
-	if not structuresFolder then
-		return nil
-	end
-	
-	local closestFloor = nil
-	local closestDist = math.huge
-	local checkDistance = TILE_SIZE * 1.5
-	
-	for _, child in ipairs(structuresFolder:GetChildren()) do
-		if child:IsA("BasePart") and child.Name == "Floor" then
-			local dist = (child.Position - position).Magnitude
-			if dist < closestDist and dist <= checkDistance then
-				closestDist = dist
-				closestFloor = child
-			end
-		end
-	end
-	
-	return closestFloor
+if not buildMode.active or not buildMode.selectedSlot or buildMode.deleteMode then
+return
 end
 
--- Calculate wall edge position (matching server logic)
-local function CalculateWallEdgePosition(position, floorPart)
-	local floorPos = floorPart.Position
-	local relativePos = position - floorPos
-	local halfTile = TILE_SIZE / 2
-	local wallSize = SLOT_CONFIG[2].size  -- Wall config
-	
-	local wallPos, wallOrientation
-	
-	-- Determine edge based on which component is larger
-	if math.abs(relativePos.X) > math.abs(relativePos.Z) then
-		-- East or West edge
-		if relativePos.X > 0 then
-			-- East edge (+X)
-			wallPos = Vector3.new(floorPos.X + halfTile, wallSize.Y / 2 + 0.5, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		else
-			-- West edge (-X)
-			wallPos = Vector3.new(floorPos.X - halfTile, wallSize.Y / 2 + 0.5, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		end
-	else
-		-- North or South edge
-		if relativePos.Z > 0 then
-			-- North edge (+Z)
-			wallPos = Vector3.new(floorPos.X, wallSize.Y / 2 + 0.5, floorPos.Z + halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		else
-			-- South edge (-Z)
-			wallPos = Vector3.new(floorPos.X, wallSize.Y / 2 + 0.5, floorPos.Z - halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		end
-	end
-	
-	return wallPos, wallOrientation
+-- Get mouse target position
+local mouseTarget = mouse.Hit.Position
+local config = SLOT_CONFIG[buildMode.selectedSlot]
+
+if not config then
+return
 end
 
--- Update ghost position based on mouse
-local function UpdateGhostPosition()
-	if not buildMode.ghost or not buildMode.active then
-		return
-	end
-	
-	local character = player.Character
-	if not character then
-		return
-	end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then
-		return
-	end
-	
-	-- Raycast from mouse
-	local ray = mouse.UnitRay
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	raycastParams.FilterDescendantsInstances = {character, buildMode.ghost}
-	
-	local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
-	
-	if result then
-		local hitPos = result.Position
-		local config = SLOT_CONFIG[buildMode.selectedSlot]
-		
-		if config.type == "floor" then
-			-- Floor: simple grid snapping
-			local snappedPos = SnapToGrid(hitPos)
-			buildMode.ghost.Position = snappedPos
-			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-			
-		elseif config.type == "wall" or config.type == "walldoor" or config.type == "wallwindow" then
-			-- Wall/Door/Window: snap to nearest floor edge
-			local closestFloor = FindClosestFloor(hitPos)
-			if closestFloor then
-				local wallPos, wallOrientation = CalculateWallEdgePosition(hitPos, closestFloor)
-				buildMode.ghost.Position = wallPos
-				buildMode.ghost.Orientation = wallOrientation
-				-- Wall color indicates if floor found (normal color = valid)
-			else
-				-- No floor nearby - show at grid position but indicate invalid
-				local snappedPos = SnapToGrid(hitPos)
-				buildMode.ghost.Position = Vector3.new(snappedPos.X, config.size.Y / 2 + 0.5, snappedPos.Z)
-				buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-				buildMode.ghost.Color = Color3.fromRGB(255, 100, 100)  -- Red for no floor nearby
-			end
-			
-		elseif config.type == "trap" then
-			-- Trap: snap to floor position
-			local snappedPos = SnapToGrid(hitPos)
-			buildMode.ghost.Position = Vector3.new(snappedPos.X, 0.75, snappedPos.Z)
-			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-			
-		elseif config.type == "ramp" then
-			-- Ramp: simple grid snapping like floor
-			local snappedPos = SnapToGrid(hitPos)
-			buildMode.ghost.Position = Vector3.new(snappedPos.X, 0.5 + config.size.Y / 2, snappedPos.Z)
-			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-			
-		elseif config.type == "ceiling" then
-			-- Ceiling: grid snapping at 8 studs height
-			local snappedPos = SnapToGrid(hitPos)
-			buildMode.ghost.Position = Vector3.new(snappedPos.X, 8, snappedPos.Z)
-			buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-		end
-		
-		-- Check if within build distance (only update color if not already red)
-		local distance = (rootPart.Position - buildMode.ghost.Position).Magnitude
-		if distance > buildMode.maxDistance then
-			buildMode.ghost.Color = Color3.fromRGB(255, 100, 100)  -- Red for out of range
-		else
-			-- Only set to normal color if wall has floor or not a wall
-			if config.type ~= "wall" and config.type ~= "walldoor" and config.type ~= "wallwindow" or FindClosestFloor(hitPos) then
-				buildMode.ghost.Color = config.color  -- Normal color
-			end
-		end
-	else
-		-- No hit, hide ghost
-		buildMode.ghost.Position = Vector3.new(0, -1000, 0)
-	end
+-- Convert to grid position
+local gridPos, gridX, gridZ, level = WorldToGrid(mouseTarget)
+
+print(string.format("[BuildClient] Ghost update: slot=%d, grid=(%d,%d,%d), rotation=%d", 
+buildMode.selectedSlot, gridX, gridZ, level, buildMode.rotation))
+
+local ghost
+local finalPos = gridPos
+local finalRotation = buildMode.rotation
+
+-- Create ghost based on type
+if config.type == "wall" then
+-- Walls snap to edges
+local edge, edgePos, edgeRotation = DetermineWallEdge(mouseTarget, gridX, gridZ)
+finalPos = Vector3.new(edgePos.X, gridPos.Y + WALL_HEIGHT/2, edgePos.Z)
+finalRotation = edgeRotation
+
+ghost = Instance.new("Part")
+ghost.Size = config.size
+print(string.format("[BuildClient] Wall ghost: edge=%s, pos=(%.1f,%.1f,%.1f)", edge, finalPos.X, finalPos.Y, finalPos.Z))
+
+elseif config.type == "ramp" then
+-- Ramps use WedgePart
+ghost = Instance.new("WedgePart")
+ghost.Size = config.size
+finalPos = gridPos + Vector3.new(0, WALL_HEIGHT/2, 0)  -- Center at mid-height
+print(string.format("[BuildClient] Ramp ghost: pos=(%.1f,%.1f,%.1f), rotation=%d", finalPos.X, finalPos.Y, finalPos.Z, finalRotation))
+
+else  -- floor
+ghost = Instance.new("Part")
+ghost.Size = config.size
+print(string.format("[BuildClient] Floor ghost: pos=(%.1f,%.1f,%.1f)", finalPos.X, finalPos.Y, finalPos.Z))
 end
 
--- Select a build slot (1-5)
-local function SelectSlot(slotNumber)
-	if slotNumber < 1 or slotNumber > 5 then
-		return
-	end
-	
-	buildMode.selectedSlot = slotNumber
-	buildMode.active = true
-	UpdateGhost()
-	
-	-- Update UI
-	slotSelected:Fire(slotNumber)
+-- Common ghost properties
+ghost.Name = "BuildGhost"
+ghost.Position = finalPos
+ghost.Anchored = true
+ghost.CanCollide = false
+ghost.Transparency = 0.5
+ghost.Material = Enum.Material.SmoothPlastic
+
+-- Check if within build distance
+local character = player.Character
+local inRange = false
+if character then
+local rootPart = character:FindFirstChild("HumanoidRootPart")
+if rootPart then
+local distance = (rootPart.Position - finalPos).Magnitude
+inRange = distance <= MAX_BUILD_DISTANCE
+end
 end
 
--- Deselect current slot
-local function DeselectSlot()
-	buildMode.active = false
-	buildMode.selectedSlot = nil
-	
-	if buildMode.ghost then
-		buildMode.ghost:Destroy()
-		buildMode.ghost = nil
-	end
-	
-	-- Update UI
-	slotDeselected:Fire()
+-- Color based on validity (green if in range, red if not)
+-- Server will do full validation, this is just for range
+if inRange then
+ghost.Color = Color3.fromRGB(100, 255, 100)  -- Green
+print("[BuildClient] Ghost: IN RANGE (green)")
+else
+ghost.Color = Color3.fromRGB(255, 100, 100)  -- Red
+print("[BuildClient] Ghost: OUT OF RANGE (red)")
 end
 
--- Rotate ghost
-local function RotateGhost()
-	buildMode.rotation = (buildMode.rotation + ROTATION_INCREMENT) % 360
-	if buildMode.ghost then
-		buildMode.ghost.Orientation = Vector3.new(0, buildMode.rotation, 0)
-	end
+-- Apply rotation
+ghost.CFrame = CFrame.new(finalPos) * CFrame.Angles(0, math.rad(finalRotation), 0)
+
+ghost.Parent = workspace
+buildMode.ghost = ghost
 end
 
--- Place structure
-local function PlaceStructure()
-	if not buildMode.active or not buildMode.ghost then
-		return
-	end
-	
-	local character = player.Character
-	if not character then
-		return
-	end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then
-		return
-	end
-	
-	-- Check distance
-	local distance = (rootPart.Position - buildMode.ghost.Position).Magnitude
-	if distance > buildMode.maxDistance then
-		warn("Too far to build!")
-		return
-	end
-	
-	local config = SLOT_CONFIG[buildMode.selectedSlot]
-	local position = buildMode.ghost.Position
-	local rotation = buildMode.rotation
-	
-	-- Send to server
-	PlaceStructureRemote:FireServer(config.type, position, rotation)
+-- Handle slot selection from UI
+slotSelected.Event:Connect(function(slotNumber)
+print(string.format("[BuildClient] ======== SLOT SELECTED: %d ========", slotNumber))
+
+buildMode.active = true
+buildMode.selectedSlot = slotNumber
+buildMode.deleteMode = false
+
+local config = SLOT_CONFIG[slotNumber]
+if config then
+print(string.format("[BuildClient] Selected: %s", config.name))
 end
 
--- Delete structure under mouse
-local function DeleteStructureUnderMouse()
-	local character = player.Character
-	if not character then
-		return
-	end
-	
-	-- Raycast from mouse
-	local ray = mouse.UnitRay
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	raycastParams.FilterDescendantsInstances = {character}
-	
-	local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
-	
-	if result and result.Instance then
-		local part = result.Instance
-		-- Check if it's a structure or trap
-		if part.Parent and (part.Parent.Name == "Structures" or part.Parent.Name == "Traps") then
-			DeleteStructureRemote:FireServer(part)
-		end
-	end
+UpdateGhost()
+end)
+
+-- Handle slot deselection from UI
+slotDeselected.Event:Connect(function()
+print("[BuildClient] ======== SLOT DESELECTED ========")
+
+buildMode.active = false
+buildMode.selectedSlot = nil
+buildMode.deleteMode = false
+
+if buildMode.ghost then
+buildMode.ghost:Destroy()
+buildMode.ghost = nil
+end
+end)
+
+-- Handle delete mode toggle
+local deleteToggle = buildEvents:FindFirstChild("DeleteModeToggle")
+if deleteToggle then
+deleteToggle.Event:Connect(function(enabled)
+print(string.format("[BuildClient] ======== DELETE MODE: %s ========", enabled and "ENABLED" or "DISABLED"))
+
+buildMode.deleteMode = enabled
+
+if enabled then
+buildMode.active = false
+buildMode.selectedSlot = nil
+if buildMode.ghost then
+buildMode.ghost:Destroy()
+buildMode.ghost = nil
+end
+end
+end)
 end
 
--- Input handling
+-- Mouse input handling
+mouse.Move:Connect(function()
+if buildMode.active and not buildMode.deleteMode then
+UpdateGhost()
+end
+end)
+
+-- Click to place or delete
+mouse.Button1Down:Connect(function()
+if buildMode.deleteMode then
+-- Delete mode: click on structure to delete
+local target = mouse.Target
+if target and target.Parent and target:FindFirstChild("GridX") or target:GetAttribute("GridX") then
+print(string.format("[BuildClient] ======== DELETE CLICK ========"))
+print(string.format("[BuildClient] Target: %s", target.Name))
+
+DeleteStructureRemote:FireServer(target)
+else
+print("[BuildClient] Delete click: no valid structure targeted")
+end
+return
+end
+
+if not buildMode.active or not buildMode.selectedSlot then
+return
+end
+
+local config = SLOT_CONFIG[buildMode.selectedSlot]
+if not config then
+return
+end
+
+-- Get placement position
+local mouseTarget = mouse.Hit.Position
+local gridPos, gridX, gridZ, level = WorldToGrid(mouseTarget)
+
+print(string.format("[BuildClient] ======== PLACE CLICK ========"))
+print(string.format("[BuildClient] Type: %s", config.type))
+print(string.format("[BuildClient] Grid: (%d, %d, %d)", gridX, gridZ, level))
+print(string.format("[BuildClient] Rotation: %d", buildMode.rotation))
+
+-- Send to server
+PlaceStructureRemote:FireServer(config.type, gridPos, buildMode.rotation)
+end)
+
+-- Keyboard input
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then
-		return
-	end
-	
-	-- Number keys 1-6 for slot selection
-	if input.KeyCode == Enum.KeyCode.One then
-		SelectSlot(1)
-	elseif input.KeyCode == Enum.KeyCode.Two then
-		SelectSlot(2)
-	elseif input.KeyCode == Enum.KeyCode.Three then
-		SelectSlot(3)
-	elseif input.KeyCode == Enum.KeyCode.Four then
-		SelectSlot(4)
-	elseif input.KeyCode == Enum.KeyCode.Five then
-		SelectSlot(5)
-	elseif input.KeyCode == Enum.KeyCode.Six then
-		SelectSlot(6)
-	elseif input.KeyCode == Enum.KeyCode.R then
-		-- R to rotate
-		RotateGhost()
-	elseif input.KeyCode == Enum.KeyCode.Escape then
-		-- Escape to cancel
-		DeselectSlot()
-	elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-		-- Left click to place
-		if buildMode.active then
-			PlaceStructure()
-		end
-	end
+if gameProcessed then return end
+
+-- R = Rotate
+if input.KeyCode == Enum.KeyCode.R then
+buildMode.rotation = (buildMode.rotation + ROTATION_INCREMENT) % 360
+print(string.format("[BuildClient] Rotation changed: %d degrees", buildMode.rotation))
+UpdateGhost()
+
+-- Q = Level down
+elseif input.KeyCode == Enum.KeyCode.Q then
+buildMode.currentLevel = math.max(0, buildMode.currentLevel - 1)
+print(string.format("[BuildClient] Level changed: %d", buildMode.currentLevel))
+UpdateGhost()
+
+-- E = Level up
+elseif input.KeyCode == Enum.KeyCode.E then
+buildMode.currentLevel = buildMode.currentLevel + 1
+print(string.format("[BuildClient] Level changed: %d", buildMode.currentLevel))
+UpdateGhost()
+
+-- ESC = Deselect
+elseif input.KeyCode == Enum.KeyCode.Escape then
+if buildMode.active or buildMode.deleteMode then
+print("[BuildClient] ESC pressed - deselecting")
+slotDeselected:Fire()
+end
+end
 end)
 
--- Update ghost position every frame
+-- Update ghost continuously during RenderStepped for smooth movement
 RunService.RenderStepped:Connect(function()
-	if buildMode.active and buildMode.ghost then
-		UpdateGhostPosition()
-	end
+if buildMode.active and buildMode.ghost and not buildMode.deleteMode then
+UpdateGhost()
+end
 end)
 
--- Listen for UI events
-selectSlotRemote.Event:Connect(SelectSlot)
-deselectSlotRemote.Event:Connect(DeselectSlot)
-
-print("[BuildClient] Build system initialized")
+print("[BuildClient] ✓ Event handlers connected")
+print("[BuildClient] Controls:")
+print("[BuildClient]   - Click hotbar or press 1/2/3 to select piece")
+print("[BuildClient]   - R to rotate")
+print("[BuildClient]   - Q/E to change build level")
+print("[BuildClient]   - Left click to place")
+print("[BuildClient]   - ESC to cancel")
