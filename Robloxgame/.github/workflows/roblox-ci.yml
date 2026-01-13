@@ -1,0 +1,17 @@
+name: Roblox CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  basic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show files (sanity check)
+        run: |
+          ls -la
+          echo "GitHub Actions is running."
