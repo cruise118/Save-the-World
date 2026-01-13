@@ -122,7 +122,7 @@ function BuildPieceFactory:CreateWall(x, z, level, edge)
 	print(string.format("[BuildPieceFactory] Creating Wall at grid (%d, %d, %d) edge=%s", x, z, level, edge))
 	
 	-- Calculate wall position and rotation
-	local wallPos, wallRotation = self.gridService:CalculateWallPosition(x, z, edge, level)
+	local wallPos, wallOrientation = self.gridService:CalculateWallPosition(x, z, edge, level)
 	
 	-- Create part
 	local wall = Instance.new("Part")
@@ -136,8 +136,8 @@ function BuildPieceFactory:CreateWall(x, z, level, edge)
 	wall.TopSurface = Enum.SurfaceType.Smooth
 	wall.BottomSurface = Enum.SurfaceType.Smooth
 	
-	-- Apply rotation
-	wall.CFrame = CFrame.new(wallPos) * CFrame.Angles(0, math.rad(wallRotation), 0)
+	-- Apply rotation (wallOrientation is Vector3 with Euler angles in degrees)
+	wall.CFrame = CFrame.new(wallPos) * CFrame.Angles(math.rad(wallOrientation.X), math.rad(wallOrientation.Y), math.rad(wallOrientation.Z))
 	
 	-- Tag as structure
 	CollectionService:AddTag(wall, "Structure")
