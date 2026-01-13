@@ -1,11 +1,24 @@
 {
-  "name": "My Roblox Game",
+  "name": "Zombie Defense",
   "tree": {
     "$className": "DataModel",
-    "Workspace": {
-      "$className": "Workspace",
-      "Script": {
-        "$path": "src/Script.lua"
+    
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "Modules": {
+        "$className": "Folder",
+        "BuildGridService": {
+          "$path": "src/Modules/BuildGridService.lua"
+        },
+        "BuildPlacementService": {
+          "$path": "src/Modules/BuildPlacementService.lua"
+        }
+      },
+      "TestBuildGrid": {
+        "$path": "src/ServerScripts/TestBuildGrid.server.lua"
+      },
+      "TestBuildPlacement": {
+        "$path": "src/ServerScripts/TestBuildPlacement.server.lua"
       }
     }
   }
