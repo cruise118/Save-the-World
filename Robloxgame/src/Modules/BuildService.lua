@@ -136,7 +136,7 @@ local edge = self.gridService:DetermineWallEdge(x, z, worldPosition)
 print(string.format("[BuildService] Determined Edge: %s", edge))
 
 -- Validate build distance
-local wallWorldPos, _ = self.gridService:CalculateWallPosition(x, z, level, edge)
+local wallWorldPos, _ = self.gridService:CalculateWallPosition(x, z, edge, level)
 local validDistance, distErr = ValidateBuildDistance(player, wallWorldPos, self.config.maxBuildDistance)
 if not validDistance then
 print("[BuildService] ✗ FAILED:", distErr)
