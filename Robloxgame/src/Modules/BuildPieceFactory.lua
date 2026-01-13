@@ -127,7 +127,7 @@ function BuildPieceFactory:CreateWall(x, z, level, edge)
 	-- Create part
 	local wall = Instance.new("Part")
 	wall.Name = string.format("Wall_%d_%d_%d_%s", x, z, level, edge)
-	wall.Size = Vector3.new(TILE_SIZE, WALL_HEIGHT, TILE_SIZE)  -- Same footprint as floor (12x8x12)
+	wall.Size = Vector3.new(TILE_SIZE, WALL_HEIGHT, 1)  -- 12 studs wide, 8 studs tall, 1 stud thick (proper thin wall)
 	wall.Position = wallPos
 	wall.Anchored = true
 	wall.CanCollide = true
@@ -150,7 +150,7 @@ function BuildPieceFactory:CreateWall(x, z, level, edge)
 	wall:SetAttribute("GridZ", z)
 	wall:SetAttribute("GridLevel", level)
 	wall:SetAttribute("Edge", edge)
-	wall:SetAttribute("Rotation", wallRotation)
+	wall:SetAttribute("Rotation", wallOrientation.Y)  -- Use Y rotation from orientation Vector3
 	wall:SetAttribute("PieceType", "wall")
 	
 	wall.Parent = self.structuresFolder

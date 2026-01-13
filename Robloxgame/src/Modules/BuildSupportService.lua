@@ -187,12 +187,17 @@ end
 	
 	Returns: structureId (string)
 ]]
-function BuildSupportService:RegisterStructure(structureData): string
+function BuildSupportService:RegisterStructure(part, metadata): string
 	local id = self:GenerateId()
 	
-	-- Store structure data
+	-- Store structure data (combine part and metadata)
+	local structureData = metadata
+	structureData.part = part
 	self.structures[id] = structureData
 	structureData.id = id
+	
+	-- Also store ID on the part for easy lookup
+	part:SetAttribute("StructureId", id)
 	
 	-- Initialize support graph entry
 	self.supportGraph[id] = {
