@@ -7,67 +7,12 @@
       "$className": "ServerScriptService",
       "Modules": {
         "$className": "Folder",
-        "ZombieAI": {
-          "$path": "src/Modules/ZombieAI.lua"
-        },
-        "BaseCoreHealth": {
-          "$path": "src/Modules/BaseCoreHealth.lua"
-        },
-        "DamageService": {
-          "$path": "src/Modules/DamageService.lua"
-        },
-        "WaveManager": {
-          "$path": "src/Modules/WaveManager.lua"
-        },
-        "StructureHealthService": {
-          "$path": "src/Modules/StructureHealthService.lua"
-        },
-        "StructureSpawner": {
-          "$path": "src/Modules/StructureSpawner.lua"
-        },
-        "TrapService": {
-          "$path": "src/Modules/TrapService.lua"
-        },
-        "BuildService": {
-          "$path": "src/Modules/BuildService.lua"
-        },
         "BuildGridService": {
           "$path": "src/Modules/BuildGridService.lua"
-        },
-        "BuildSupportService": {
-          "$path": "src/Modules/BuildSupportService.lua"
-        },
-        "TerrainSupportService": {
-          "$path": "src/Modules/TerrainSupportService.lua"
-        },
-        "BuildPlacementService": {
-          "$path": "src/Modules/BuildPlacementService.lua"
-        },
-        "BuildPieceFactory": {
-          "$path": "src/Modules/BuildPieceFactory.lua"
         }
       },
-      "GameInit": {
-        "$path": "src/ServerScripts/GameInit.server.lua"
-      }
-    },
-    
-    "StarterPlayer": {
-      "$className": "StarterPlayer",
-      "StarterPlayerScripts": {
-        "$className": "StarterPlayerScripts",
-        "ChatCommandClient": {
-          "$path": "src/ClientScripts/ChatCommandClient.client.lua"
-        },
-        "BuildClient": {
-          "$path": "src/ClientScripts/BuildClient.client.lua"
-        },
-        "BuildUI": {
-          "$path": "src/ClientScripts/BuildUI.client.lua"
-        },
-        "HealthBarClient": {
-          "$path": "src/ClientScripts/HealthBarClient.client.lua"
-        }
+      "TestBuildGrid": {
+        "$path": "src/ServerScripts/TestBuildGrid.server.lua"
       }
     }
   }
