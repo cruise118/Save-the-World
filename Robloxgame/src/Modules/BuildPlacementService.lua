@@ -99,7 +99,7 @@ function BuildPlacementService.ValidateFloor(x, z, level)
 	end
 	
 	-- Check if already occupied
-	if not BuildGridService.CanPlaceFloor(x, z, level) then
+	if not BuildGridService:CanPlaceFloor(x, z, level) then
 		return false, string.format("Floor slot already occupied at (%d, %d, %d)", x, z, level)
 	end
 	
@@ -140,7 +140,7 @@ function BuildPlacementService.ValidateWall(x, z, level, dir)
 	end
 	
 	-- Check if already occupied
-	if not BuildGridService.CanPlaceWall(x, z, level, dir) then
+	if not BuildGridService:CanPlaceWall(x, z, level, dir) then
 		return false, string.format("Wall edge already occupied at (%d, %d, %d, %s)", x, z, level, dir)
 	end
 	
@@ -181,7 +181,7 @@ function BuildPlacementService.ValidateRamp(x, z, level, rot)
 	end
 	
 	-- Check if already occupied
-	if not BuildGridService.CanPlaceRamp(x, z, level, rot) then
+	if not BuildGridService:CanPlaceRamp(x, z, level, rot) then
 		return false, string.format("Ramp slot already occupied at (%d, %d, %d, %d°)", x, z, level, rot)
 	end
 	
