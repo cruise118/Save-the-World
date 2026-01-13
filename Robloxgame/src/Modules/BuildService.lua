@@ -87,7 +87,7 @@ print(string.format("[BuildService] Rotation: %d", rotation))
 
 -- Convert world position to grid
 local x, z = self.gridService:WorldToGrid(worldPosition)
-	local level = self.gridService:WorldYToLevel(worldPosition.Y)
+local level = self.gridService:WorldYToLevel(worldPosition.Y)
 print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
 
 -- Validate build distance
@@ -128,7 +128,7 @@ print(string.format("[BuildService] World Position: (%.1f, %.1f, %.1f)", worldPo
 
 -- Convert world position to grid
 local x, z = self.gridService:WorldToGrid(worldPosition)
-	local level = self.gridService:WorldYToLevel(worldPosition.Y)
+local level = self.gridService:WorldYToLevel(worldPosition.Y)
 print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
 
 -- Determine which edge of the tile we're closest to
@@ -174,7 +174,7 @@ print(string.format("[BuildService] Rotation: %d", rotation))
 
 -- Convert world position to grid
 local x, z = self.gridService:WorldToGrid(worldPosition)
-	local level = self.gridService:WorldYToLevel(worldPosition.Y)
+local level = self.gridService:WorldYToLevel(worldPosition.Y)
 print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
 
 -- Validate build distance
