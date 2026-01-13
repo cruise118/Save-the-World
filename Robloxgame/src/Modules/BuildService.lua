@@ -1,455 +1,260 @@
 --[[
-	BuildService.lua
-	Server-authoritative building placement system with grid-based validation
-	
-	Usage:
-		local BuildService = require(game.ServerScriptService.Modules.BuildService)
-		local buildService = BuildService.new()
-		
-		-- Place structures via RemoteEvents
-		local success, part, err = buildService:PlaceFloor(player, position, rotation)
+BuildService.lua - COMPLETELY REFACTORED FOR FORTNITE-STYLE GRID/LEVEL SYSTEM
+Server-authoritative building with grid-based placement, structural support, cascade destruction
+
+New Architecture:
+- Integrates BuildGridService for grid/occupancy
+- Integrates BuildSupportService for structural validation
+- Integrates TerrainSupportService for terrain support
+- Integrates BuildPlacementService for validation
+- Integrates BuildPieceFactory for spawning
+- NO CEILING STRUCTURE (use stacked floors)
+- Only Floor, Wall, Ramp pieces
+- Full metadata storage for AI pathfinding
+
+Usage:
+local BuildService = require(...BuildService)
+local service = BuildService.new(gridService, supportService, terrainService, placementService, factoryService)
+local success, part, err = service:PlaceFloor(player, x, z, level, rotation)
 --]]
 
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local BuildService = {}
 BuildService.__index = BuildService
 
--- Constants
-local TILE_SIZE = 12
-local FLOOR_SIZE = Vector3.new(TILE_SIZE, 1, TILE_SIZE)
-local WALL_SIZE = Vector3.new(TILE_SIZE, 8, 1)
-local RAMP_SIZE = Vector3.new(TILE_SIZE, 8, TILE_SIZE)  -- Fortnite-style: 8 studs tall like walls
-local FLOOR_Y = 0.5  -- Consistent floor placement height
+-- Create new BuildService with all dependencies
+function BuildService.new(buildGridService, buildSupportService, terrainSupportService, buildPlacementService, buildPieceFactory, config)
+assert(RunService:IsServer(), "BuildService must run on server")
 
--- Helper to get or create folders
-local function GetStructuresFolder()
-	local folder = workspace:FindFirstChild("Structures")
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = "Structures"
-		folder.Parent = workspace
-	end
-	return folder
+local self = setmetatable({}, BuildService)
+
+-- Inject dependencies
+self.gridService = buildGridService
+self.supportService = buildSupportService
+self.terrainService = terrainSupportService
+self.placementService = buildPlacementService
+self.factory = buildPieceFactory
+
+-- Config
+self.config = config or {}
+self.config.maxBuildDistance = self.config.maxBuildDistance or 50
+self.config.debug = self.config.debug or true
+
+-- Track floor trap placements (for future trap system)
+self.floorTraps = {}  -- {[floorPart] = trapPart}
+
+print("[BuildService] ✓✓✓ INITIALIZED WITH NEW FORTNITE-STYLE ARCHITECTURE ✓✓✓")
+print("[BuildService] - BuildGridService: READY")
+print("[BuildService] - BuildSupportService: READY")
+print("[BuildService] - TerrainSupportService: READY")
+print("[BuildService] - BuildPlacementService: READY")
+print("[BuildService] - BuildPieceFactory: READY")
+print("[BuildService] - Max Build Distance:", self.config.maxBuildDistance)
+
+return self
 end
 
-local function GetTrapsFolder()
-	local folder = workspace:FindFirstChild("Traps")
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = "Traps"
-		folder.Parent = workspace
-	end
-	return folder
+-- Validate player build distance
+local function ValidateBuildDistance(player, worldPosition, maxDistance)
+local character = player.Character
+if not character then
+return false, "Character not found"
 end
 
--- Snap position to grid
-local function SnapToGrid(position: Vector3): Vector3
-	local x = math.floor((position.X / TILE_SIZE) + 0.5) * TILE_SIZE
-	local z = math.floor((position.Z / TILE_SIZE) + 0.5) * TILE_SIZE
-	return Vector3.new(x, FLOOR_Y, z)
+local rootPart = character:FindFirstChild("HumanoidRootPart")
+if not rootPart then
+return false, "Character not loaded"
 end
 
--- Get grid key from position
-local function GetGridKey(position: Vector3): string
-	local snapped = SnapToGrid(position)
-	return string.format("%d_%d", snapped.X, snapped.Z)
+local distance = (rootPart.Position - worldPosition).Magnitude
+if distance > maxDistance then
+return false, string.format("Too far (%.1f studs, max %.1f)", distance, maxDistance)
 end
 
--- Create a new BuildService instance
-function BuildService.new(config)
-	assert(RunService:IsServer(), "BuildService must run on the server")
-	
-	local self = setmetatable({}, BuildService)
-	
-	-- Config with defaults
-	self.config = {
-		maxBuildDistance = 50,  -- Max distance from player to build
-		debug = false,
-	}
-	
-	if config then
-		for k, v in pairs(config) do
-			self.config[k] = v
-		end
-	end
-	
-	-- Grid tracking
-	self.floorGrid = {}  -- { [gridKey] = floorPart }
-	self.partToGrid = {}  -- { [floorPart] = gridKey }
-	
-	-- Dependencies (injected or retrieved)
-	self.trapService = nil  -- Will be set externally
-	
-	return self
+return true, nil
 end
 
--- Set TrapService reference
-function BuildService:SetTrapService(trapService)
-	self.trapService = trapService
-end
+-- Place a floor at grid position
+-- worldPosition is converted to grid coordinates internally
+function BuildService:PlaceFloor(player, worldPosition, rotation)
+print(string.format("[BuildService] ======== PLACE FLOOR REQUEST ========"))
+print(string.format("[BuildService] Player: %s", player.Name))
+print(string.format("[BuildService] World Position: (%.1f, %.1f, %.1f)", worldPosition.X, worldPosition.Y, worldPosition.Z))
+print(string.format("[BuildService] Rotation: %d", rotation))
+
+-- Convert world position to grid
+local x, z, level = self.gridService:WorldToGrid(worldPosition)
+print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
 
 -- Validate build distance
-local function ValidateBuildDistance(player, position, maxDistance): (boolean, string?)
-	local character = player.Character
-	if not character then
-		return false, "Character not found"
-	end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then
-		return false, "HumanoidRootPart not found"
-	end
-	
-	local distance = (rootPart.Position - position).Magnitude
-	if distance > maxDistance then
-		return false, "Too far to build (max " .. maxDistance .. " studs)"
-	end
-	
-	return true
+local gridWorldPos = self.gridService:GridToWorld(x, z, level)
+local validDistance, distErr = ValidateBuildDistance(player, gridWorldPos, self.config.maxBuildDistance)
+if not validDistance then
+print("[BuildService] ✗ FAILED:", distErr)
+return false, nil, distErr
 end
 
--- Place a floor tile
-function BuildService:PlaceFloor(player: Player, position: Vector3, rotationY: number): (boolean, Part?, string?)
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
-	if not valid then
-		return false, nil, err
-	end
-	
-	-- Snap to grid
-	local snappedPos = SnapToGrid(position)
-	local gridKey = GetGridKey(snappedPos)
-	
-	-- Check for overlap
-	if self.floorGrid[gridKey] then
-		return false, nil, "Floor already exists at this location"
-	end
-	
-	-- Create floor
-	local floor = Instance.new("Part")
-	floor.Name = "Floor"
-	floor.Size = FLOOR_SIZE
-	floor.Position = snappedPos
-	floor.Anchored = true
-	floor.CanCollide = true
-	floor.Material = Enum.Material.Concrete
-	floor.Color = Color3.fromRGB(120, 120, 120)
-	floor.Orientation = Vector3.new(0, rotationY or 0, 0)
-	
-	-- Set attributes
-	floor:SetAttribute("MaxHealth", 150)
-	floor:SetAttribute("Health", 150)
-	floor:SetAttribute("Destroyed", false)
-	floor:SetAttribute("GridKey", gridKey)
-	
-	-- Tag as Structure
-	CollectionService:AddTag(floor, "Structure")
-	
-	-- Parent to workspace
-	floor.Parent = GetStructuresFolder()
-	
-	-- Track in grid
-	self.floorGrid[gridKey] = floor
-	self.partToGrid[floor] = gridKey
-	
-	-- Cleanup on removal
-	floor.AncestryChanged:Connect(function(_, parent)
-		if not parent then
-			self.floorGrid[gridKey] = nil
-			self.partToGrid[floor] = nil
-		end
-	end)
-	
-	if self.config.debug then
-		print("[BuildService] Placed floor at", gridKey)
-	end
-	
-	return true, floor, nil
+-- Validate placement
+local isValid, reason = self.placementService:ValidateFloorPlacement(x, z, level, rotation)
+if not isValid then
+print("[BuildService] ✗ FAILED:", reason)
+return false, nil, reason
 end
 
--- Place a wall on floor edge
-function BuildService:PlaceWall(player: Player, position: Vector3, rotationY: number): (boolean, Part?, string?)
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
-	if not valid then
-		return false, nil, err
-	end
-	
-	-- Snap to nearest grid position
-	local snappedPos = SnapToGrid(position)
-	
-	-- Find closest floor tile
-	local closestFloor = nil
-	local closestDist = math.huge
-	local checkDistance = TILE_SIZE * 1.5
-	
-	for gridKey, floorPart in pairs(self.floorGrid) do
-		if floorPart and floorPart.Parent then
-			local dist = (floorPart.Position - position).Magnitude
-			if dist < closestDist and dist <= checkDistance then
-				closestDist = dist
-				closestFloor = floorPart
-			end
-		end
-	end
-	
-	if not closestFloor then
-		return false, nil, "Wall must be placed adjacent to a floor"
-	end
-	
-	-- Determine which edge of the floor is closest (North, South, East, West)
-	local floorPos = closestFloor.Position
-	local relativePos = position - floorPos
-	local halfTile = TILE_SIZE / 2
-	
-	local wallPos, wallOrientation
-	
-	-- Determine edge based on which component is larger
-	if math.abs(relativePos.X) > math.abs(relativePos.Z) then
-		-- East or West edge
-		if relativePos.X > 0 then
-			-- East edge (+X)
-			wallPos = Vector3.new(floorPos.X + halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)  -- Wall faces Z direction
-		else
-			-- West edge (-X)
-			wallPos = Vector3.new(floorPos.X - halfTile, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z)
-			wallOrientation = Vector3.new(0, 90, 0)
-		end
-	else
-		-- North or South edge
-		if relativePos.Z > 0 then
-			-- North edge (+Z)
-			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z + halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)  -- Wall faces X direction
-		else
-			-- South edge (-Z)
-			wallPos = Vector3.new(floorPos.X, WALL_SIZE.Y / 2 + FLOOR_Y, floorPos.Z - halfTile)
-			wallOrientation = Vector3.new(0, 0, 0)
-		end
-	end
-	
-	-- Create wall
-	local wall = Instance.new("Part")
-	wall.Name = "Wall"
-	wall.Size = WALL_SIZE
-	wall.Position = wallPos
-	wall.Anchored = true
-	wall.CanCollide = true
-	wall.Material = Enum.Material.Concrete
-	wall.Color = Color3.fromRGB(150, 150, 150)
-	wall.Orientation = wallOrientation
-	
-	-- Set attributes
-	wall:SetAttribute("MaxHealth", 200)
-	wall:SetAttribute("Health", 200)
-	wall:SetAttribute("Destroyed", false)
-	
-	-- Tag as Structure
-	CollectionService:AddTag(wall, "Structure")
-	
-	-- Parent to workspace
-	wall.Parent = GetStructuresFolder()
-	
-	if self.config.debug then
-		print("[BuildService] Placed wall at edge:", wallPos, "orientation:", wallOrientation)
-	end
-	
-	return true, wall, nil
+-- Create the floor
+local floorPart, metadata = self.factory:CreateFloor(x, z, level, rotation)
+
+-- Register with grid
+self.gridService:RegisterFloor(x, z, level, floorPart, metadata)
+print("[BuildService] ✓ Registered floor with grid service")
+
+-- Register with support system (calculates support relationships)
+self.supportService:RegisterStructure(floorPart, metadata)
+print("[BuildService] ✓ Registered floor with support service")
+
+print(string.format("[BuildService] ✓✓✓ FLOOR PLACED SUCCESSFULLY ✓✓✓"))
+return true, floorPart, nil
 end
 
--- Place a trap on a floor
-function BuildService:PlaceFloorTrap(player: Player, floorPart: BasePart, trapType: string): (boolean, Part?, string?)
-	-- Validate floor
-	if not floorPart or not floorPart.Parent then
-		return false, nil, "Invalid floor part"
-	end
-	
-	-- Check if floor already has a trap
-	if floorPart:GetAttribute("FloorHasTrap") then
-		return false, nil, "Floor already has a trap"
-	end
-	
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, floorPart.Position, self.config.maxBuildDistance)
-	if not valid then
-		return false, nil, err
-	end
-	
-	-- Only spike traps for MVP
-	if trapType ~= "spike" then
-		return false, nil, "Unknown trap type: " .. trapType
-	end
-	
-	-- Create trap
-	local trap = Instance.new("Part")
-	trap.Name = "SpikeTrap"
-	trap.Size = Vector3.new(TILE_SIZE - 0.2, 0.5, TILE_SIZE - 0.2)  -- Slightly smaller than floor
-	trap.Position = Vector3.new(floorPart.Position.X, floorPart.Position.Y + 0.75, floorPart.Position.Z)
-	trap.Anchored = true
-	trap.CanCollide = false  -- Zombies walk over it
-	trap.Material = Enum.Material.Metal
-	trap.Color = Color3.fromRGB(180, 50, 50)  -- Red for danger
-	trap.Orientation = floorPart.Orientation
-	
-	-- Store reference to floor
-	trap:SetAttribute("FloorPart", floorPart:GetFullName())
-	
-	-- Parent to workspace
-	trap.Parent = GetTrapsFolder()
-	
-	-- Mark floor as having a trap
-	floorPart:SetAttribute("FloorHasTrap", true)
-	floorPart:SetAttribute("TrapId", trap:GetFullName())
-	
-	-- Register with TrapService
-	if self.trapService then
-		self.trapService:RegisterSpikeTrap(trap)
-	end
-	
-	-- Cleanup trap marker when trap is removed
-	trap.AncestryChanged:Connect(function(_, parent)
-		if not parent and floorPart and floorPart.Parent then
-			floorPart:SetAttribute("FloorHasTrap", false)
-			floorPart:SetAttribute("TrapId", nil)
-		end
-	end)
-	
-	if self.config.debug then
-		print("[BuildService] Placed spike trap on floor")
-	end
-	
-	return true, trap, nil
+-- Place a wall at grid position (determined from world position + nearest edge)
+function BuildService:PlaceWall(player, worldPosition, rotation)
+print(string.format("[BuildService] ======== PLACE WALL REQUEST ========"))
+print(string.format("[BuildService] Player: %s", player.Name))
+print(string.format("[BuildService] World Position: (%.1f, %.1f, %.1f)", worldPosition.X, worldPosition.Y, worldPosition.Z))
+
+-- Convert world position to grid
+local x, z, level = self.gridService:WorldToGrid(worldPosition)
+print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
+
+-- Determine which edge of the tile we're closest to
+local edge = self.gridService:DetermineWallEdge(worldPosition, x, z)
+print(string.format("[BuildService] Determined Edge: %s", edge))
+
+-- Validate build distance
+local wallWorldPos, _ = self.gridService:CalculateWallPosition(x, z, level, edge)
+local validDistance, distErr = ValidateBuildDistance(player, wallWorldPos, self.config.maxBuildDistance)
+if not validDistance then
+print("[BuildService] ✗ FAILED:", distErr)
+return false, nil, distErr
 end
 
--- Delete a structure or trap
-function BuildService:DeleteStructure(player: Player, part: BasePart): (boolean, string?)
-	if not part or not part.Parent then
-		return false, "Invalid part"
-	end
-	
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, part.Position, self.config.maxBuildDistance)
-	if not valid then
-		return false, err
-	end
-	
-	-- Remove from grid if it's a floor
-	local gridKey = self.partToGrid[part]
-	if gridKey then
-		self.floorGrid[gridKey] = nil
-		self.partToGrid[part] = nil
-	end
-	
-	-- Destroy the part
-	part:Destroy()
-	
-	if self.config.debug then
-		print("[BuildService] Deleted structure:", part.Name)
-	end
-	
-	return true, nil
+-- Validate placement
+local isValid, reason = self.placementService:ValidateWallPlacement(x, z, level, edge)
+if not isValid then
+print("[BuildService] ✗ FAILED:", reason)
+return false, nil, reason
 end
 
--- Get floor at position (for trap placement)
-function BuildService:GetFloorAtPosition(position: Vector3): Part?
-	local gridKey = GetGridKey(position)
-	return self.floorGrid[gridKey]
+-- Create the wall
+local wallPart, metadata = self.factory:CreateWall(x, z, level, edge)
+
+-- Register with grid
+self.gridService:RegisterWall(x, z, level, edge, wallPart, metadata)
+print("[BuildService] ✓ Registered wall with grid service")
+
+-- Register with support system
+self.supportService:RegisterStructure(wallPart, metadata)
+print("[BuildService] ✓ Registered wall with support service")
+
+print(string.format("[BuildService] ✓✓✓ WALL PLACED SUCCESSFULLY ✓✓✓"))
+return true, wallPart, nil
 end
 
--- Place a ramp (for going up levels)
-function BuildService:PlaceRamp(player: Player, position: Vector3, rotationY: number): (boolean, Part?, string?)
-	-- Validate distance
-	local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
-	if not valid then
-		return false, nil, err
-	end
-	
-	-- Snap to grid
-	local snappedPos = SnapToGrid(position)
-	
-	-- Create ramp as a WedgePart
-	local ramp = Instance.new("WedgePart")
-	ramp.Name = "Ramp"
-	ramp.Size = RAMP_SIZE
-	ramp.Position = Vector3.new(snappedPos.X, FLOOR_Y + RAMP_SIZE.Y / 2, snappedPos.Z)
-	ramp.Anchored = true
-	ramp.CanCollide = true
-	ramp.Material = Enum.Material.Concrete
-	ramp.Color = Color3.fromRGB(130, 130, 100)
-	ramp.Orientation = Vector3.new(0, rotationY or 0, 0)
-	
-	-- Set attributes
-	ramp:SetAttribute("MaxHealth", 150)
-	ramp:SetAttribute("Health", 150)
-	ramp:SetAttribute("Destroyed", false)
-	
-	-- Tag as Structure
-	CollectionService:AddTag(ramp, "Structure")
-	
-	-- Parent to workspace
-	ramp.Parent = GetStructuresFolder()
-	
-	if self.config.debug then
-		print("[BuildService] Placed ramp at", snappedPos)
-	end
-	
-	return true, ramp, nil
+-- Place a ramp at grid position
+function BuildService:PlaceRamp(player, worldPosition, rotation)
+print(string.format("[BuildService] ======== PLACE RAMP REQUEST ========"))
+print(string.format("[BuildService] Player: %s", player.Name))
+print(string.format("[BuildService] World Position: (%.1f, %.1f, %.1f)", worldPosition.X, worldPosition.Y, worldPosition.Z))
+print(string.format("[BuildService] Rotation: %d", rotation))
+
+-- Convert world position to grid
+local x, z, level = self.gridService:WorldToGrid(worldPosition)
+print(string.format("[BuildService] Grid Position: (%d, %d, %d)", x, z, level))
+
+-- Validate build distance
+local gridWorldPos = self.gridService:GridToWorld(x, z, level)
+local validDistance, distErr = ValidateBuildDistance(player, gridWorldPos, self.config.maxBuildDistance)
+if not validDistance then
+print("[BuildService] ✗ FAILED:", distErr)
+return false, nil, distErr
 end
 
--- Place a wall with a door (players can pass through)
-
--- Place a ceiling tile
-function BuildService:PlaceCeiling(player: Player, position: Vector3, rotationY: number): (boolean, Part?, string?)
--- Validate distance
-local valid, err = ValidateBuildDistance(player, position, self.config.maxBuildDistance)
-if not valid then
-return false, nil, err
+-- Validate placement
+local isValid, reason = self.placementService:ValidateRampPlacement(x, z, level, rotation)
+if not isValid then
+print("[BuildService] ✗ FAILED:", reason)
+return false, nil, reason
 end
 
--- Snap to grid
-local snappedPos = SnapToGrid(position)
--- Adjust Y position for ceiling (8 studs above floor)
-local ceilingY = snappedPos.Y + 8 - 0.5  -- 8 studs up, then down 0.5 for ceiling thickness
-local ceilingPos = Vector3.new(snappedPos.X, ceilingY, snappedPos.Z)
+-- Create the ramp
+local rampPart, metadata = self.factory:CreateRamp(x, z, level, rotation)
 
--- Create ceiling
-local ceiling = Instance.new("Part")
-ceiling.Name = "Ceiling"
-ceiling.Size = FLOOR_SIZE  -- Same size as floor (12x1x12)
-ceiling.Position = ceilingPos
-ceiling.Anchored = true
-ceiling.CanCollide = true
-ceiling.Material = Enum.Material.Concrete
-ceiling.Color = Color3.fromRGB(140, 140, 140)
-ceiling.Orientation = Vector3.new(0, rotationY or 0, 0)
+-- Register with grid
+self.gridService:RegisterRamp(x, z, level, rotation, rampPart, metadata)
+print("[BuildService] ✓ Registered ramp with grid service")
 
--- Set attributes
-ceiling:SetAttribute("MaxHealth", 150)
-ceiling:SetAttribute("Health", 150)
-ceiling:SetAttribute("Destroyed", false)
+-- Register with support system
+self.supportService:RegisterStructure(rampPart, metadata)
+print("[BuildService] ✓ Registered ramp with support service")
 
--- Tag as Structure
-CollectionService:AddTag(ceiling, "Structure")
-
--- Parent to workspace
-ceiling.Parent = GetStructuresFolder()
-
-if self.config.debug then
-print("[BuildService] Placed ceiling at", ceilingPos)
+print(string.format("[BuildService] ✓✓✓ RAMP PLACED SUCCESSFULLY ✓✓✓"))
+return true, rampPart, nil
 end
 
-return true, ceiling, nil
+-- Delete a structure (triggers cascade destruction via support service)
+function BuildService:DeleteStructure(player, part)
+print(string.format("[BuildService] ======== DELETE STRUCTURE REQUEST ========"))
+print(string.format("[BuildService] Player: %s", player.Name))
+print(string.format("[BuildService] Part: %s", part.Name))
+
+-- Validate player is close enough
+local validDistance, distErr = ValidateBuildDistance(player, part.Position, self.config.maxBuildDistance)
+if not validDistance then
+print("[BuildService] ✗ FAILED:", distErr)
+return false, distErr
+end
+
+-- Get metadata
+local metadata = self.factory:GetMetadata(part)
+if not metadata then
+print("[BuildService] ✗ FAILED: No metadata found (not a valid structure)")
+return false, "Not a valid structure"
+end
+
+-- Unregister from support service (this triggers cascade destruction)
+print("[BuildService] Unregistering from support service (will trigger cascade)...")
+self.supportService:UnregisterStructure(part, metadata)
+
+-- Unregister from grid
+if metadata.pieceType == "floor" then
+self.gridService:UnregisterFloor(metadata.gridX, metadata.gridZ, metadata.gridLevel)
+elseif metadata.pieceType == "wall" then
+self.gridService:UnregisterWall(metadata.gridX, metadata.gridZ, metadata.gridLevel, metadata.edge)
+elseif metadata.pieceType == "ramp" then
+self.gridService:UnregisterRamp(metadata.gridX, metadata.gridZ, metadata.gridLevel, metadata.rotation)
+end
+print("[BuildService] ✓ Unregistered from grid service")
+
+-- Destroy the piece
+self.factory:DestroyPiece(part, metadata)
+
+print(string.format("[BuildService] ✓✓✓ STRUCTURE DELETED ✓✓✓"))
+return true, nil
 end
 
 -- Cleanup
 function BuildService:Destroy()
-self.floorGrid = {}
-self.partToGrid = {}
-self.trapService = nil
+print("[BuildService] Cleaning up...")
+
+-- Factory handles cleanup of all pieces
+if self.factory then
+self.factory:Destroy()
+end
+
+print("[BuildService] ✓ Cleanup complete")
 end
 
 return BuildService
