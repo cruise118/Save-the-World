@@ -122,7 +122,7 @@ function BuildPieceFactory:CreateWall(x, z, level, edge)
 	print(string.format("[BuildPieceFactory] Creating Wall at grid (%d, %d, %d) edge=%s", x, z, level, edge))
 	
 	-- Calculate wall position and rotation
-	local wallPos, wallRotation = self.gridService:CalculateWallPosition(x, z, level, edge)
+	local wallPos, wallRotation = self.gridService:CalculateWallPosition(x, z, edge, level)
 	
 	-- Create part
 	local wall = Instance.new("Part")
