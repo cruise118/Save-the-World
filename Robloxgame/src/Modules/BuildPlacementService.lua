@@ -53,13 +53,13 @@ function BuildPlacementService:ValidateWallPlacement(x, z, level, edge)
 	print(string.format("[BuildPlacementService] Validating Wall at (%d, %d, %d) edge=%s", x, z, level, edge))
 	
 	-- Check if already occupied
-	if self.gridService:IsWallOccupied(x, z, level, edge) then
+	if self.gridService:IsWallOccupied(x, z, edge, level) then
 		print("[BuildPlacementService] INVALID: Wall already occupied")
 		return false, "Wall already exists at this location"
 	end
 	
 	-- Check structural support
-	if not self.supportService:IsWallSupported(x, z, level, edge) then
+	if not self.supportService:IsWallSupported(x, z, edge, level) then
 		print("[BuildPlacementService] INVALID: Wall not supported")
 		return false, "Wall not supported (needs adjacent floor or wall beneath)"
 	end
