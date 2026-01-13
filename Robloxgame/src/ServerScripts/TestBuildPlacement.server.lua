@@ -13,8 +13,11 @@ print("========================================")
 local BuildGridService = require(game.ServerScriptService.Modules.BuildGridService)
 local BuildPlacementService = require(game.ServerScriptService.Modules.BuildPlacementService)
 
--- Initialize
-BuildPlacementService.Init(BuildGridService)
+-- Create BuildGridService instance
+local gridService = BuildGridService.new()
+
+-- Initialize BuildPlacementService with the instance
+BuildPlacementService.Init(gridService)
 
 print("\n--- Test 1: Valid Placements ---")
 
